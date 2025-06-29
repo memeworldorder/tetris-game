@@ -1,0 +1,25 @@
+{
+  "name": "@gamefi/scheduler",
+  "version": "1.0.0",
+  "description": "scheduler microservice for GameFi platform",
+  "main": "dist/server.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "lint": "eslint src --ext .ts",
+    "lint:fix": "eslint src --ext .ts --fix"
+  },
+  "keywords": [
+    "gamefi",
+    "microservice",
+    "scheduler"
+  ],
+  "author": "GameFi Platform Team",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

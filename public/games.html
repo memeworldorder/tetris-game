@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GameFi Demo Games Collection</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #0f0f23 0%, #1a1a3a 50%, #2d1b69 100%);
+            color: white;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 50px;
+        }
+
+        .header h1 {
+            font-size: 3rem;
+            font-weight: 800;
+            background: linear-gradient(45deg, #00d4ff, #ff00ff, #00ff88);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.2rem;
+            color: #ccc;
+            margin-bottom: 20px;
+        }
+
+        .vrf-badge {
+            display: inline-block;
+            background: linear-gradient(45deg, #00ff88, #00d4ff);
+            color: #000;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 0.9rem;
+        }
+
+        .games-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 30px;
+            margin-bottom: 50px;
+        }
+
+        .game-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .game-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 40px rgba(0, 212, 255, 0.3);
+            border-color: #00d4ff;
+        }
+
+        .game-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(45deg, #00d4ff, #ff00ff);
+        }
+
+        .game-title {
+            font-size: 1.5rem;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #00d4ff;
+        }
+
+        .game-type {
+            display: inline-block;
+            background: rgba(255, 255, 255, 0.2);
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            margin-bottom: 15px;
+            color: #ccc;
+        }
+
+        .game-description {
+            color: #ddd;
+            line-height: 1.6;
+            margin-bottom: 20px;
+        }
+
+        .game-features {
+            list-style: none;
+            margin-bottom: 25px;
+        }
+
+        .game-features li {
+            padding: 5px 0;
+            color: #bbb;
+            position: relative;
+            padding-left: 20px;
+        }
+
+        .game-features li::before {
+            content: '✓';
+            position: absolute;
+            left: 0;
+            color: #00ff88;
+            font-weight: bold;
+        }
+
+        .game-button {
+            display: inline-block;
+            background: linear-gradient(45deg, #00d4ff, #0099cc);
+            color: white;
+            text-decoration: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+
+        .game-button:hover {
+            background: linear-gradient(45deg, #00b4cc, #0077aa);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 212, 255, 0.4);
+        }
+
+        .game-button.secondary {
+            background: linear-gradient(45deg, #666, #444);
+        }
+
+        .game-button.vrf {
+            background: linear-gradient(45deg, #00ff88, #00cc66);
+        }
+
+        .tech-section {
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 20px;
+            padding: 30px;
+            margin-top: 50px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .tech-section h2 {
+            color: #00d4ff;
+            margin-bottom: 20px;
+            font-size: 1.8rem;
+        }
+
+        .tech-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+        }
+
+        .tech-item {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 20px;
+            border-radius: 12px;
+            border-left: 4px solid #00ff88;
+        }
+
+        .tech-item h3 {
+            color: #00ff88;
+            margin-bottom: 10px;
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .games-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .game-card {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎮 GameFi Demo Collection</h1>
+            <p>Experience Web3 gaming with blockchain integration, VRF randomness, and play-to-earn mechanics</p>
+            <div class="vrf-badge">🎲 Powered by VRF Randomness</div>
+        </div>
+
+        <div class="games-grid">
+            <!-- Main Tetris Game -->
+            <div class="game-card">
+                <div class="game-title">🧩 MWOR Tetris</div>
+                <div class="game-type">Puzzle • VRF Enhanced</div>
+                <div class="game-description">
+                    The classic Tetris game enhanced with cryptographically secure VRF (Verifiable Random Function) piece generation. Each piece drop is mathematically provable and completely fair.
+                </div>
+                <ul class="game-features">
+                    <li>VRF-powered random piece generation</li>
+                    <li>Solana wallet integration</li>
+                    <li>Lives system with crypto payments</li>
+                    <li>Anti-cheat protection</li>
+                    <li>Mobile optimized</li>
+                </ul>
+                <a href="/" class="game-button vrf">Play Tetris</a>
+                <a href="/api/test-vrf-tetris" class="game-button secondary">Test VRF</a>
+            </div>
+
+            <!-- Asteroid Blaster -->
+            <div class="game-card">
+                <div class="game-title">🚀 Asteroid Blaster</div>
+                <div class="game-type">Action • Space Shooter</div>
+                <div class="game-description">
+                    Fast-paced space shooter demonstrating GameFi SDK integration. Blast asteroids, earn points, and compete on leaderboards while managing your lives.
+                </div>
+                <ul class="game-features">
+                    <li>Arcade-style space combat</li>
+                    <li>Real-time scoring</li>
+                    <li>Wallet connection demo</li>
+                    <li>Lives management</li>
+                    <li>Leaderboard integration</li>
+                </ul>
+                <a href="/asteroid-blaster.html" class="game-button">Play Game</a>
+            </div>
+
+            <!-- Basic Clicking Game -->
+            <div class="game-card">
+                <div class="game-title">👆 Clicking Game</div>
+                <div class="game-type">Casual • Click-to-Earn</div>
+                <div class="game-description">
+                    Simple clicking game demonstrating basic GameFi SDK integration. Perfect example for developers learning to integrate blockchain features.
+                </div>
+                <ul class="game-features">
+                    <li>Simple click-to-earn mechanics</li>
+                    <li>SDK integration demo</li>
+                    <li>Real-time logging</li>
+                    <li>Payment simulation</li>
+                    <li>Developer-friendly</li>
+                </ul>
+                <a href="/clicking-game.html" class="game-button">Play Game</a>
+            </div>
+
+            <!-- VRF Test Suite -->
+            <div class="game-card">
+                <div class="game-title">🔬 VRF Test Suite</div>
+                <div class="game-type">Technical • Testing</div>
+                <div class="game-description">
+                    Technical demonstration of the VRF (Verifiable Random Function) system showing cryptographic piece generation, verification, and session management.
+                </div>
+                <ul class="game-features">
+                    <li>Live VRF testing</li>
+                    <li>Cryptographic verification</li>
+                    <li>Session isolation testing</li>
+                    <li>Proof generation</li>
+                    <li>Developer tools</li>
+                </ul>
+                <a href="/api/test-vrf-tetris" class="game-button secondary">Run Tests</a>
+            </div>
+        </div>
+
+        <div class="tech-section">
+            <h2>🛠 Technology Stack</h2>
+            <div class="tech-grid">
+                <div class="tech-item">
+                    <h3>VRF Randomness</h3>
+                    <p>Cryptographically secure random number generation using HMAC-SHA256 with daily entropy rotation and per-session isolation.</p>
+                </div>
+                <div class="tech-item">
+                    <h3>Solana Integration</h3>
+                    <p>Full Solana wallet adapter support with Phantom, Solflare, and other popular wallets for seamless Web3 gaming.</p>
+                </div>
+                <div class="tech-item">
+                    <h3>Anti-Cheat System</h3>
+                    <p>Server-side validation, move tracking, and cryptographic proof verification to ensure fair gameplay.</p>
+                </div>
+                <div class="tech-item">
+                    <h3>GameFi Features</h3>
+                    <p>Lives system, token payments, leaderboards, achievements, and complete play-to-earn economy integration.</p>
+                </div>
+            </div>
+        </div>
+
+        <div style="text-align: center; margin-top: 50px; color: #888;">
+            <p>Built with Next.js, TypeScript, and Solana Web3.js</p>
+            <p style="margin-top: 10px;">🎲 All randomness is cryptographically verifiable • 🔒 Complete anti-cheat protection</p>
+        </div>
+    </div>
+</body>
+</html> 

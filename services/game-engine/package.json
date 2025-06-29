@@ -1,0 +1,44 @@
+{
+  "name": "game-engine",
+  "version": "1.0.0",
+  "description": "Game validation and scoring engine for GameFi platform",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "test": "jest"
+  },
+  "dependencies": {
+    "@solana/web3.js": "^1.78.0",
+    "amqplib": "^0.10.3",
+    "cors": "^2.8.5",
+    "crypto": "^1.0.1",
+    "dotenv": "^16.3.1",
+    "ethers": "^6.9.0",
+    "express": "^4.18.2",
+    "pg": "^8.11.3",
+    "redis": "^4.6.10"
+  },
+  "devDependencies": {
+    "@types/amqplib": "^0.10.4",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/jest": "^29.5.11",
+    "@types/node": "^20.10.4",
+    "@types/pg": "^8.15.4",
+    "jest": "^29.7.0",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.3.3"
+  },
+  "keywords": [
+    "gamefi",
+    "microservice",
+    "game-engine"
+  ],
+  "author": "GameFi Platform Team",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

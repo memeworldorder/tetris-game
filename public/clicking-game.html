@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Basic Game Integration - GameFi SDK</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .container {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            max-width: 600px;
+            width: 100%;
+        }
+
+        .game-area {
+            background: #f8f9fa;
+            border: 2px solid #e9ecef;
+            border-radius: 12px;
+            height: 300px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            margin: 20px 0;
+            position: relative;
+        }
+
+        .score-display {
+            font-size: 24px;
+            font-weight: bold;
+            color: #495057;
+            margin-bottom: 20px;
+        }
+
+        .game-button {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 5px;
+            transition: all 0.2s;
+        }
+
+        .game-button:hover {
+            background: #218838;
+            transform: translateY(-1px);
+        }
+
+        .game-button:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .status-bar {
+            background: #e9ecef;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .lives-display {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .wallet-status {
+            font-size: 14px;
+            color: #6c757d;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 20px;
+        }
+
+        .gamefi-sdk-ui {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+
+        .gamefi-panel {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            padding: 16px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            min-width: 200px;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .gamefi-wallet {
+            font-size: 11px;
+            opacity: 0.7;
+            margin-bottom: 8px;
+            font-family: monospace;
+        }
+
+        .gamefi-lives {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 8px 0;
+        }
+
+        .gamefi-button {
+            background: #6366f1;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 8px 12px;
+            cursor: pointer;
+            font-size: 12px;
+            margin: 2px;
+            transition: all 0.2s;
+        }
+
+        .gamefi-button:hover {
+            background: #5855eb;
+            transform: translateY(-1px);
+        }
+
+        .gamefi-button:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .gamefi-toast {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 12px 20px;
+            border-radius: 8px;
+            color: white;
+            font-weight: 500;
+            z-index: 10000;
+            animation: slideDown 0.3s ease-out;
+        }
+
+        .gamefi-toast-success {
+            background: #28a745;
+        }
+
+        .gamefi-toast-error {
+            background: #dc3545;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateX(-50%) translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+            }
+        }
+
+        .log {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 20px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-size: 12px;
+            font-family: monospace;
+        }
+
+        .log-entry {
+            margin: 2px 0;
+            padding: 2px 0;
+        }
+
+        .log-error {
+            color: #dc3545;
+        }
+
+        .log-success {
+            color: #28a745;
+        }
+
+        .log-info {
+            color: #17a2b8;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎮 Basic Game Integration Example</h1>
+        <p>This demonstrates how to integrate GameFi SDK into a simple clicking game.</p>
+
+        <div class="status-bar">
+            <div class="lives-display">
+                <span>❤️ Lives: <span id="lives-count">-</span></span>
+            </div>
+            <div class="wallet-status" id="wallet-status">
+                Wallet: Not connected
+            </div>
+        </div>
+
+        <div class="game-area">
+            <div class="score-display" id="score-display">Score: 0</div>
+            <div id="game-status">Click "Start Game" to begin!</div>
+            <div class="controls">
+                <button class="game-button" id="start-game" disabled>Start Game</button>
+                <button class="game-button" id="click-button" disabled>Click Me! (+10)</button>
+                <button class="game-button" id="end-game" disabled>End Game</button>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button class="game-button" id="connect-wallet">Connect Wallet</button>
+            <button class="game-button" id="claim-daily" disabled>Claim Daily Lives</button>
+            <button class="game-button" id="buy-lives" disabled>Buy Lives</button>
+            <button class="game-button" id="show-leaderboard" disabled>Show Leaderboard</button>
+        </div>
+
+        <div class="log" id="game-log">
+            <div class="log-entry log-info">GameFi SDK Integration Example Loaded</div>
+            <div class="log-entry">Click "Connect Wallet" to begin</div>
+        </div>
+    </div>
+
+    <!-- GameFi SDK UI will be inserted here -->
+
+    <script>
+        // Simple GameFi SDK Mock for Demo
+        class GameFiSDKDemo {
+            constructor(config) {
+                this.config = config;
+                this.walletAddress = null;
+                this.userData = null;
+                this.currentSession = null;
+                this.isInitialized = false;
+            }
+
+            async initialize() {
+                this.log('Initializing GameFi SDK...', 'info');
+                await this.sleep(1000);
+                this.isInitialized = true;
+                this.log('GameFi SDK initialized successfully!', 'success');
+                this.updateUI();
+            }
+
+            async connectWallet() {
+                this.log('Connecting wallet...', 'info');
+                await this.sleep(1500);
+                
+                // Simulate wallet connection
+                this.walletAddress = '7xKX' + Math.random().toString(36).substr(2, 40);
+                this.userData = {
+                    walletAddress: this.walletAddress,
+                    totalLives: 3,
+                    lastLifeRefresh: new Date(),
+                    gamesPlayedToday: 0,
+                    highScore: 0,
+                    totalGamesPlayed: 0
+                };
+
+                this.log(`Wallet connected: ${this.walletAddress.slice(0, 8)}...`, 'success');
+                this.showToast('Wallet connected successfully!', 'success');
+                this.config.onWalletConnected?.(this.walletAddress);
+                this.updateUI();
+                return this.walletAddress;
+            }
+
+            async disconnectWallet() {
+                this.log('Disconnecting wallet...', 'info');
+                this.walletAddress = null;
+                this.userData = null;
+                this.currentSession = null;
+                this.log('Wallet disconnected', 'info');
+                this.config.onWalletDisconnected?.();
+                this.updateUI();
+            }
+
+            async startGameSession() {
+                if (!this.walletAddress) {
+                    throw new Error('Wallet not connected');
+                }
+                if (!this.userData || this.userData.totalLives <= 0) {
+                    throw new Error('No lives available');
+                }
+
+                this.log('Starting game session...', 'info');
+                await this.sleep(800);
+
+                // Consume a life
+                this.userData.totalLives--;
+                this.config.onLivesChanged?.(this.userData.totalLives);
+
+                this.currentSession = {
+                    sessionId: Date.now(),
+                    gameId: this.config.gameId,
+                    walletAddress: this.walletAddress,
+                    startTime: new Date(),
+                    moves: []
+                };
+
+                this.log(`Game session started (ID: ${this.currentSession.sessionId})`, 'success');
+                this.config.onGameStart?.();
+                this.updateUI();
+                return this.currentSession;
+            }
+
+            async endGameSession(score, gameData) {
+                if (!this.currentSession) {
+                    throw new Error('No active game session');
+                }
+
+                this.log(`Ending game session with score: ${score}`, 'info');
+                await this.sleep(1000);
+
+                // Update high score
+                if (score > this.userData.highScore) {
+                    this.userData.highScore = score;
+                    this.log('New high score!', 'success');
+                }
+
+                this.userData.gamesPlayedToday++;
+                this.userData.totalGamesPlayed++;
+
+                this.log('Score submitted successfully', 'success');
+                this.showToast(`Game completed! Score: ${score}`, 'success');
+                
+                this.currentSession = null;
+                this.config.onGameEnd?.(score, gameData);
+                this.updateUI();
+            }
+
+            async claimDailyLives() {
+                if (!this.walletAddress) {
+                    throw new Error('Wallet not connected');
+                }
+
+                this.log('Claiming daily lives...', 'info');
+                await this.sleep(1200);
+
+                const livesAdded = Math.floor(Math.random() * 3) + 1;
+                this.userData.totalLives += livesAdded;
+                this.config.onLivesChanged?.(this.userData.totalLives);
+
+                this.log(`Claimed ${livesAdded} daily lives!`, 'success');
+                this.showToast(`Claimed ${livesAdded} daily lives!`, 'success');
+                this.updateUI();
+            }
+
+            async buyLives() {
+                if (!this.walletAddress) {
+                    throw new Error('Wallet not connected');
+                }
+
+                this.log('Initiating life purchase...', 'info');
+                // Simulate payment modal
+                if (confirm('Buy 3 lives for $0.09?\n\n(This is a demo - no real payment)')) {
+                    await this.sleep(2000);
+                    this.userData.totalLives += 3;
+                    this.config.onLivesChanged?.(this.userData.totalLives);
+                    this.log('Lives purchased successfully!', 'success');
+                    this.showToast('3 lives purchased!', 'success');
+                    this.updateUI();
+                } else {
+                    this.log('Purchase cancelled', 'info');
+                }
+            }
+
+            async getLeaderboard(period = 'daily') {
+                this.log(`Loading ${period} leaderboard...`, 'info');
+                await this.sleep(800);
+
+                // Generate mock leaderboard
+                const leaderboard = [];
+                for (let i = 0; i < 10; i++) {
+                    leaderboard.push({
+                        rank: i + 1,
+                        walletAddress: '7xKX' + Math.random().toString(36).substr(2, 8),
+                        score: Math.floor(Math.random() * 10000) + 1000,
+                        timestamp: new Date()
+                    });
+                }
+
+                // Sort by score
+                leaderboard.sort((a, b) => b.score - a.score);
+                
+                this.log(`Leaderboard loaded (${leaderboard.length} entries)`, 'success');
+                return leaderboard;
+            }
+
+            getUserData() {
+                return this.userData;
+            }
+
+            isReady() {
+                return this.isInitialized;
+            }
+
+            trackMove(moveData) {
+                if (this.currentSession) {
+                    this.currentSession.moves.push({
+                        timestamp: Date.now(),
+                        data: moveData
+                    });
+                }
+            }
+
+            // UI helpers
+            updateUI() {
+                const livesCount = document.getElementById('lives-count');
+                const walletStatus = document.getElementById('wallet-status');
+                const connectButton = document.getElementById('connect-wallet');
+                const startGameButton = document.getElementById('start-game');
+                const claimDailyButton = document.getElementById('claim-daily');
+                const buyLivesButton = document.getElementById('buy-lives');
+                const showLeaderboardButton = document.getElementById('show-leaderboard');
+
+                if (livesCount) {
+                    livesCount.textContent = this.userData ? this.userData.totalLives : '-';
+                }
+
+                if (walletStatus) {
+                    walletStatus.textContent = this.walletAddress 
+                        ? `Wallet: ${this.walletAddress.slice(0, 8)}...`
+                        : 'Wallet: Not connected';
+                }
+
+                if (connectButton) {
+                    connectButton.textContent = this.walletAddress ? 'Disconnect Wallet' : 'Connect Wallet';
+                }
+
+                const hasWallet = !!this.walletAddress;
+                const hasLives = this.userData && this.userData.totalLives > 0;
+                const hasSession = !!this.currentSession;
+
+                if (startGameButton) {
+                    startGameButton.disabled = !hasWallet || !hasLives || hasSession;
+                }
+                if (claimDailyButton) {
+                    claimDailyButton.disabled = !hasWallet;
+                }
+                if (buyLivesButton) {
+                    buyLivesButton.disabled = !hasWallet;
+                }
+                if (showLeaderboardButton) {
+                    showLeaderboardButton.disabled = !hasWallet;
+                }
+            }
+
+            showToast(message, type = 'success') {
+                const toast = document.createElement('div');
+                toast.className = `gamefi-toast gamefi-toast-${type}`;
+                toast.textContent = message;
+                document.body.appendChild(toast);
+
+                setTimeout(() => {
+                    if (toast.parentNode) {
+                        toast.parentNode.removeChild(toast);
+                    }
+                }, 3000);
+            }
+
+            log(message, type = 'info') {
+                const logElement = document.getElementById('game-log');
+                if (logElement) {
+                    const entry = document.createElement('div');
+                    entry.className = `log-entry log-${type}`;
+                    entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+                    logElement.appendChild(entry);
+                    logElement.scrollTop = logElement.scrollHeight;
+                }
+            }
+
+            sleep(ms) {
+                return new Promise(resolve => setTimeout(resolve, ms));
+            }
+        }
+
+        // Game state
+        let gameScore = 0;
+        let gameActive = false;
+
+        // Initialize GameFi SDK
+        const gamefiSDK = new GameFiSDKDemo({
+            gameId: 'demo-clicking-game',
+            gameName: 'Demo Clicking Game',
+            apiEndpoint: 'https://demo-api.gamefi.com',
+            onWalletConnected: (wallet) => {
+                console.log('Wallet connected:', wallet);
+            },
+            onWalletDisconnected: () => {
+                console.log('Wallet disconnected');
+            },
+            onGameStart: () => {
+                console.log('Game started!');
+                startGameUI();
+            },
+            onGameEnd: (score, gameData) => {
+                console.log('Game ended with score:', score);
+                endGameUI();
+            },
+            onLivesChanged: (lives) => {
+                console.log('Lives updated:', lives);
+            },
+            onError: (error) => {
+                console.error('GameFi SDK error:', error);
+                gamefiSDK.log(`Error: ${error}`, 'error');
+            }
+        });
+
+        // Game functions
+        function startGameUI() {
+            gameScore = 0;
+            gameActive = true;
+            updateGameDisplay();
+            document.getElementById('start-game').disabled = true;
+            document.getElementById('click-button').disabled = false;
+            document.getElementById('end-game').disabled = false;
+            document.getElementById('game-status').textContent = 'Game active! Click to score points!';
+        }
+
+        function endGameUI() {
+            gameActive = false;
+            document.getElementById('start-game').disabled = false;
+            document.getElementById('click-button').disabled = true;
+            document.getElementById('end-game').disabled = true;
+            document.getElementById('game-status').textContent = `Game over! Final score: ${gameScore}`;
+        }
+
+        function updateGameDisplay() {
+            document.getElementById('score-display').textContent = `Score: ${gameScore}`;
+        }
+
+        // Event listeners
+        document.addEventListener('DOMContentLoaded', async () => {
+            await gamefiSDK.initialize();
+
+            // Connect wallet button
+            document.getElementById('connect-wallet').addEventListener('click', async () => {
+                try {
+                    if (gamefiSDK.walletAddress) {
+                        await gamefiSDK.disconnectWallet();
+                    } else {
+                        await gamefiSDK.connectWallet();
+                    }
+                } catch (error) {
+                    gamefiSDK.showToast(error.message, 'error');
+                }
+            });
+
+            // Start game button
+            document.getElementById('start-game').addEventListener('click', async () => {
+                try {
+                    await gamefiSDK.startGameSession();
+                } catch (error) {
+                    gamefiSDK.showToast(error.message, 'error');
+                }
+            });
+
+            // Click button (main game mechanic)
+            document.getElementById('click-button').addEventListener('click', () => {
+                if (gameActive) {
+                    gameScore += 10;
+                    updateGameDisplay();
+                    
+                    // Track move for anti-cheat
+                    gamefiSDK.trackMove({
+                        type: 'click',
+                        score: gameScore,
+                        timestamp: Date.now()
+                    });
+                }
+            });
+
+            // End game button
+            document.getElementById('end-game').addEventListener('click', async () => {
+                if (gameActive) {
+                    try {
+                        await gamefiSDK.endGameSession(gameScore, {
+                            clicks: gameScore / 10,
+                            duration: Date.now() - gamefiSDK.currentSession.startTime.getTime()
+                        });
+                    } catch (error) {
+                        gamefiSDK.showToast(error.message, 'error');
+                    }
+                }
+            });
+
+            // Claim daily lives
+            document.getElementById('claim-daily').addEventListener('click', async () => {
+                try {
+                    await gamefiSDK.claimDailyLives();
+                } catch (error) {
+                    gamefiSDK.showToast(error.message, 'error');
+                }
+            });
+
+            // Buy lives
+            document.getElementById('buy-lives').addEventListener('click', async () => {
+                try {
+                    await gamefiSDK.buyLives();
+                } catch (error) {
+                    gamefiSDK.showToast(error.message, 'error');
+                }
+            });
+
+            // Show leaderboard
+            document.getElementById('show-leaderboard').addEventListener('click', async () => {
+                try {
+                    const leaderboard = await gamefiSDK.getLeaderboard('daily');
+                    let leaderboardText = 'Daily Leaderboard:\n\n';
+                    leaderboard.slice(0, 5).forEach(entry => {
+                        leaderboardText += `${entry.rank}. ${entry.walletAddress.slice(0, 8)}... - ${entry.score} points\n`;
+                    });
+                    alert(leaderboardText);
+                } catch (error) {
+                    gamefiSDK.showToast(error.message, 'error');
+                }
+            });
+        });
+    </script>
+</body>
+</html> 

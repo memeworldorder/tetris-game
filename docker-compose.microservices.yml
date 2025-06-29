@@ -1,0 +1,477 @@
+version: '3.8'
+
+services:
+  # ======================
+  # Infrastructure Services
+  # ======================
+  
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: gamefi_platform
+      POSTGRES_USER: gamefi_user
+      POSTGRES_PASSWORD: gamefi_password
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+      # Performance and timeout settings
+      POSTGRES_SHARED_PRELOAD_LIBRARIES: ""
+      POSTGRES_MAX_CONNECTIONS: "100"
+      POSTGRES_CHECKPOINT_COMPLETION_TARGET: "0.7"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./shared/database/init.sql:/docker-entrypoint-initdb.d/01-init.sql
+      - ./shared/database/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gamefi_user -d gamefi_platform"]
+      interval: 5s
+      timeout: 10s
+      retries: 12
+      start_period: 120s
+    restart: unless-stopped
+    command: >
+      postgres 
+      -c max_connections=100
+      -c shared_buffers=256MB
+      -c effective_cache_size=1GB
+      -c maintenance_work_mem=64MB
+      -c checkpoint_completion_target=0.7
+      -c wal_buffers=16MB
+      -c default_statistics_target=100
+      -c random_page_cost=1.1
+      -c effective_io_concurrency=200
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: gamefi
+      RABBITMQ_DEFAULT_PASS: gamefi_queue
+      RABBITMQ_DEFAULT_VHOST: gamefi_vhost
+    ports:
+      - "5672:5672"    # AMQP port
+      - "15672:15672"  # Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    restart: unless-stopped
+
+  # ======================
+  # Core Services
+  # ======================
+
+  api-gateway:
+    build: ./services/api-gateway
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=your-jwt-secret-here
+      - USER_SERVICE_URL=http://user-service:3010
+      - GAME_ENGINE_URL=http://game-engine:3011
+      - REWARDS_SERVICE_URL=http://rewards-service:3012
+      - PAYMENT_SERVICE_URL=http://payment-service:3013
+      - ANALYTICS_SERVICE_URL=http://analytics-service:3014
+    depends_on:
+      redis:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  gaming-hub:
+    build: ./services/gaming-hub
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=development
+      - API_GATEWAY_URL=http://api-gateway:3000
+      - NEXT_PUBLIC_API_URL=http://localhost:3000
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  user-service:
+    build: ./services/user-service
+    ports:
+      - "3010:3010"
+    environment:
+      - NODE_ENV=development
+      - PORT=3010
+      - DATABASE_URL=postgresql://gamefi_user:gamefi_password@postgres:5432/gamefi_platform
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=your-jwt-secret-here
+      - RABBITMQ_URL=amqp://gamefi:gamefi_queue@rabbitmq:5672/gamefi_vhost
+      - LOG_LEVEL=info
+      - SERVICE_NAME=user-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3010/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+
+  game-engine:
+    build: ./services/game-engine
+    ports:
+      - "3011:3011"
+    environment:
+      - NODE_ENV=development
+      - PORT=3011
+      - DATABASE_URL=postgresql://gamefi_user:gamefi_password@postgres:5432/gamefi_platform
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://gamefi:gamefi_queue@rabbitmq:5672/gamefi_vhost
+      - VRF_PRIVATE_KEY=your-vrf-private-key
+      - SOLANA_RPC_URL=https://api.mainnet-beta.solana.com
+      - SERVICE_NAME=game-engine
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3011/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  rewards-service:
+    build: ./services/rewards-service
+    ports:
+      - "3012:3012"
+    environment:
+      - NODE_ENV=development
+      - PORT=3012
+      - DATABASE_URL=postgresql://gamefi_user:gamefi_password@postgres:5432/gamefi_platform
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://gamefi:gamefi_queue@rabbitmq:5672/gamefi_vhost
+      - SOCIAL_HUB_URL=http://social-hub:3017
+      - SERVICE_NAME=rewards-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3012/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  payment-service:
+    build: ./services/payment-service
+    ports:
+      - "3013:3013"
+    environment:
+      - NODE_ENV=development
+      - PORT=3013
+      - DATABASE_URL=postgresql://gamefi_user:gamefi_password@postgres:5432/gamefi_platform
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://gamefi:gamefi_queue@rabbitmq:5672/gamefi_vhost
+      - SOLANA_RPC_URL=https://api.mainnet-beta.solana.com
+      - PAYMENT_WALLET_PRIVATE_KEY=your-payment-wallet-key
+      - SERVICE_NAME=payment-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3013/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  analytics-service:
+    build: ./services/analytics-service
+    ports:
+      - "3014:3014"
+    environment:
+      - NODE_ENV=development
+      - PORT=3014
+      - DATABASE_URL=postgresql://gamefi_user:gamefi_password@postgres:5432/gamefi_platform
+      - REDIS_URL=redis://redis:6379
+      - CLICKHOUSE_URL=http://clickhouse:8123
+      - SERVICE_NAME=analytics-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3014/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # ======================
+  # Social Services
+  # ======================
+
+  telegram-bot:
+    build: ./services/telegram-bot
+    ports:
+      - "3015:3015"
+    environment:
+      - NODE_ENV=development
+      - PORT=3015
+      - DATABASE_URL=postgresql://gamefi_user:gamefi_password@postgres:5432/gamefi_platform
+      - RABBITMQ_URL=amqp://gamefi:gamefi_queue@rabbitmq:5672/gamefi_vhost
+      - TELEGRAM_BOT_TOKEN=your-telegram-bot-token
+      - TELEGRAM_CHAT_ID=your-telegram-chat-id
+      - TELEGRAM_CHANNEL_ID=your-telegram-channel-id
+      - CORS_ORIGIN=*
+      - SERVICE_NAME=telegram-bot
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3015/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  twitter-bot:
+    build: ./services/twitter-bot
+    ports:
+      - "3016:3016"
+    environment:
+      - NODE_ENV=development
+      - PORT=3016
+      - DATABASE_URL=postgresql://gamefi_user:gamefi_password@postgres:5432/gamefi_platform
+      - RABBITMQ_URL=amqp://gamefi:gamefi_queue@rabbitmq:5672/gamefi_vhost
+      - TWITTER_API_KEY=your-twitter-api-key
+      - TWITTER_API_SECRET=your-twitter-api-secret
+      - TWITTER_ACCESS_TOKEN=your-twitter-access-token
+      - TWITTER_ACCESS_SECRET=your-twitter-access-secret
+      - CORS_ORIGIN=*
+      - SERVICE_NAME=twitter-bot
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3016/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  social-hub:
+    build: ./services/social-hub
+    ports:
+      - "3017:3017"
+    environment:
+      - NODE_ENV=development
+      - PORT=3017
+      - DATABASE_URL=postgresql://gamefi_user:gamefi_password@postgres:5432/gamefi_platform
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://gamefi:gamefi_queue@rabbitmq:5672/gamefi_vhost
+      - TELEGRAM_BOT_URL=http://telegram-bot:3015
+      - TWITTER_BOT_URL=http://twitter-bot:3016
+      - SERVICE_NAME=social-hub
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      telegram-bot:
+        condition: service_healthy
+      twitter-bot:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3017/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # ======================
+  # Background Services
+  # ======================
+
+  scheduler:
+    build: ./services/scheduler
+    ports:
+      - "3018:3018"
+    environment:
+      - NODE_ENV=development
+      - PORT=3018
+      - DATABASE_URL=postgresql://gamefi_user:gamefi_password@postgres:5432/gamefi_platform
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://gamefi:gamefi_queue@rabbitmq:5672/gamefi_vhost
+      - REWARDS_SERVICE_URL=http://rewards-service:3012
+      - ANALYTICS_SERVICE_URL=http://analytics-service:3014
+      - SOCIAL_HUB_URL=http://social-hub:3017
+      - SERVICE_NAME=scheduler
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      rewards-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3018/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  admin-dashboard:
+    build: ./services/admin-dashboard
+    ports:
+      - "3019:3015"
+    environment:
+      - NODE_ENV=development
+      - PORT=3015
+      - DATABASE_URL=postgresql://gamefi_user:gamefi_password@postgres:5432/gamefi_platform
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://gamefi:gamefi_queue@rabbitmq:5672/gamefi_vhost
+      - API_GATEWAY_URL=http://api-gateway:3000
+      - USER_SERVICE_URL=http://user-service:3010
+      - GAME_ENGINE_URL=http://game-engine:3011
+      - REWARDS_SERVICE_URL=http://rewards-service:3012
+      - PAYMENT_SERVICE_URL=http://payment-service:3013
+      - ANALYTICS_SERVICE_URL=http://analytics-service:3014
+      - SOCIAL_HUB_URL=http://social-hub:3017
+      - CORS_ORIGIN=*
+      - ADMIN_SECRET=your-admin-secret-key
+      - SERVICE_NAME=admin-dashboard
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      api-gateway:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
+      game-engine:
+        condition: service_healthy
+      rewards-service:
+        condition: service_healthy
+      payment-service:
+        condition: service_healthy
+      analytics-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3015/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # ======================
+  # Additional Infrastructure
+  # ======================
+
+  clickhouse:
+    image: yandex/clickhouse-server:latest
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+      - ./shared/database/clickhouse-init.sql:/docker-entrypoint-initdb.d/init.sql
+    environment:
+      CLICKHOUSE_DB: analytics
+      CLICKHOUSE_USER: analytics_user
+      CLICKHOUSE_PASSWORD: analytics_password
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8123/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infrastructure/nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./infrastructure/nginx/ssl:/etc/nginx/ssl
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+      gaming-hub:
+        condition: service_healthy
+      admin-dashboard:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  rabbitmq_data:
+  clickhouse_data:
+
+networks:
+  default:
+    driver: bridge 

@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GameFi SDK Live Demo - Asteroid Blaster</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #0f0f23 0%, #1a1a3a 50%, #2d1b69 100%);
+            color: white;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        .header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(10px);
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            font-weight: 700;
+            background: linear-gradient(45deg, #00d4ff, #ff00ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header-stats {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            font-size: 14px;
+        }
+
+        .stat {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .score {
+            font-weight: bold;
+            color: #00ff88;
+        }
+
+        .lives {
+            font-weight: bold;
+            color: #ff4444;
+        }
+
+        .wallet {
+            font-family: monospace;
+            font-size: 12px;
+            color: #888;
+        }
+
+        .game-container {
+            position: relative;
+            margin-top: 70px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: calc(100vh - 70px);
+        }
+
+        #gameCanvas {
+            border: 2px solid #00d4ff;
+            border-radius: 8px;
+            background: #000011;
+            box-shadow: 0 0 50px rgba(0, 212, 255, 0.3);
+        }
+
+        .game-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            z-index: 100;
+            background: rgba(0, 0, 0, 0.9);
+            padding: 40px;
+            border-radius: 16px;
+            border: 2px solid #00d4ff;
+            box-shadow: 0 0 30px rgba(0, 212, 255, 0.4);
+        }
+
+        .game-overlay h2 {
+            font-size: 32px;
+            margin-bottom: 20px;
+            background: linear-gradient(45deg, #00d4ff, #ff00ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .game-overlay p {
+            font-size: 16px;
+            margin-bottom: 20px;
+            line-height: 1.5;
+            color: #ccc;
+        }
+
+        .game-button {
+            background: linear-gradient(45deg, #00d4ff, #0099cc);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin: 8px;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .game-button:hover {
+            background: linear-gradient(45deg, #00b4cc, #0077aa);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 212, 255, 0.4);
+        }
+
+        .game-button:disabled {
+            background: #555;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .game-button.secondary {
+            background: linear-gradient(45deg, #666, #444);
+        }
+
+        .game-button.secondary:hover {
+            background: linear-gradient(45deg, #777, #555);
+        }
+
+        .controls {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 12px;
+            border: 1px solid #333;
+            text-align: center;
+            font-size: 14px;
+            color: #ccc;
+        }
+
+        .notification {
+            position: fixed;
+            top: 100px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            border-left: 4px solid #00ff88;
+            font-size: 14px;
+            z-index: 2000;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .error {
+            border-left-color: #ff4444;
+        }
+
+        .info {
+            border-left-color: #00d4ff;
+        }
+
+        @media (max-width: 768px) {
+            .header {
+                flex-direction: column;
+                gap: 10px;
+                padding: 10px;
+            }
+
+            .header-stats {
+                gap: 15px;
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+
+            #gameCanvas {
+                width: 95vw;
+                height: auto;
+            }
+
+            .game-overlay {
+                padding: 20px;
+                width: 90%;
+            }
+
+            .controls {
+                bottom: 10px;
+                padding: 10px;
+                font-size: 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <h1>🚀 Asteroid Blaster - GameFi Demo</h1>
+        <div class="header-stats">
+            <div class="stat">
+                <span>Score:</span>
+                <span class="score" id="current-score">0</span>
+            </div>
+            <div class="stat">
+                <span>❤️</span>
+                <span class="lives" id="lives-display">-</span>
+            </div>
+            <div class="stat">
+                <span>High Score:</span>
+                <span id="high-score">0</span>
+            </div>
+            <div class="stat">
+                <span class="wallet" id="wallet-display">Connect Wallet</span>
+            </div>
+        </div>
+    </header>
+
+    <div class="game-container">
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        
+        <div class="game-overlay" id="game-overlay">
+            <h2>🚀 Welcome to Asteroid Blaster!</h2>
+            <p>
+                Experience the first GameFi-powered space shooter!<br>
+                <strong>Earn rewards</strong> for your skills, compete on leaderboards,<br>
+                and purchase lives with crypto.
+            </p>
+            <div>
+                <button class="game-button" id="connect-wallet-btn">
+                    🔗 Connect Wallet to Play
+                </button>
+            </div>
+            <div style="margin-top: 20px;">
+                <button class="game-button secondary" id="demo-mode-btn">
+                    👀 Watch Demo Mode
+                </button>
+            </div>
+            <div style="margin-top: 20px; font-size: 12px; color: #888;">
+                This is a demo using mock GameFi SDK. Connect wallet to see the full experience!
+            </div>
+        </div>
+    </div>
+
+    <div class="controls">
+        <strong>Controls:</strong> Arrow Keys to Move • Spacebar to Shoot • ESC to Pause
+    </div>
+
+    <script>
+        // Mock GameFi SDK for demo
+        class MockGameFiSDK {
+            constructor(config) {
+                this.config = config;
+                this.walletAddress = null;
+                this.userData = null;
+                this.currentSession = null;
+                this.isInitialized = false;
+            }
+
+            async initialize() {
+                await this.sleep(500);
+                this.isInitialized = true;
+                console.log('Mock GameFi SDK initialized');
+            }
+
+            async connectWallet() {
+                await this.sleep(1000);
+                this.walletAddress = '7xKX' + Math.random().toString(36).substr(2, 40);
+                this.userData = {
+                    walletAddress: this.walletAddress,
+                    totalLives: 3,
+                    highScore: Math.floor(Math.random() * 5000),
+                    gamesPlayedToday: Math.floor(Math.random() * 10)
+                };
+                
+                this.config.onWalletConnected?.(this.walletAddress);
+                this.config.onLivesChanged?.(this.userData.totalLives);
+                return this.walletAddress;
+            }
+
+            async startGameSession() {
+                if (!this.walletAddress) throw new Error('Wallet not connected');
+                if (this.userData.totalLives <= 0) throw new Error('No lives available');
+                
+                this.userData.totalLives--;
+                this.config.onLivesChanged?.(this.userData.totalLives);
+                
+                this.currentSession = {
+                    sessionId: Date.now(),
+                    gameId: this.config.gameId,
+                    walletAddress: this.walletAddress,
+                    startTime: new Date()
+                };
+                
+                this.config.onGameStart?.();
+                return this.currentSession;
+            }
+
+            async endGameSession(score, gameData) {
+                if (!this.currentSession) throw new Error('No active session');
+                
+                if (score > this.userData.highScore) {
+                    this.userData.highScore = score;
+                }
+                
+                this.currentSession = null;
+                this.config.onGameEnd?.(score, gameData);
+            }
+
+            async getLeaderboard() {
+                const leaderboard = [];
+                for (let i = 0; i < 10; i++) {
+                    leaderboard.push({
+                        rank: i + 1,
+                        walletAddress: '7xKX' + Math.random().toString(36).substr(2, 8),
+                        score: Math.floor(Math.random() * 10000) + 1000,
+                        timestamp: new Date()
+                    });
+                }
+                return leaderboard.sort((a, b) => b.score - a.score);
+            }
+
+            async buyLives() {
+                await this.sleep(1000);
+                this.userData.totalLives += 3;
+                this.config.onLivesChanged?.(this.userData.totalLives);
+                showNotification('3 lives purchased! (Demo)', 'success');
+            }
+
+            getUserData() {
+                return this.userData;
+            }
+
+            isReady() {
+                return this.isInitialized;
+            }
+
+            trackMove(data) {
+                // Mock tracking
+                if (Math.random() < 0.01) {
+                    console.log('Tracking move:', data.type);
+                }
+            }
+
+            sleep(ms) {
+                return new Promise(resolve => setTimeout(resolve, ms));
+            }
+        }
+
+        // Game state
+        let canvas = document.getElementById('gameCanvas');
+        let ctx = canvas.getContext('2d');
+        let gameState = 'menu';
+        let score = 0;
+        let gameStartTime = 0;
+
+        // Game objects
+        let player = {
+            x: canvas.width / 2,
+            y: canvas.height - 50,
+            width: 30,
+            height: 20,
+            speed: 5
+        };
+
+        let bullets = [];
+        let asteroids = [];
+        let particles = [];
+        let lastAsteroidSpawn = 0;
+
+        // Initialize Mock GameFi SDK
+        const gamefiSDK = new MockGameFiSDK({
+            gameId: 'asteroid-blaster-demo',
+            gameName: 'Asteroid Blaster',
+            apiEndpoint: 'https://demo-api.gamefi.com',
+            
+            onGameStart: () => {
+                showNotification('Game session started! Good luck!', 'success');
+            },
+            
+            onGameEnd: (finalScore) => {
+                showNotification(`Game completed! Score: ${finalScore.toLocaleString()}`, 'success');
+                updateHighScore();
+            },
+            
+            onLivesChanged: (lives) => {
+                document.getElementById('lives-display').textContent = lives;
+            },
+            
+            onWalletConnected: (wallet) => {
+                document.getElementById('wallet-display').textContent = 
+                    `${wallet.slice(0, 6)}...${wallet.slice(-4)}`;
+                showNotification('Wallet connected! (Demo mode)', 'success');
+                hideGameOverlay();
+                updateHighScore();
+            },
+            
+            onError: (error) => {
+                showNotification(`Error: ${error}`, 'error');
+            }
+        });
+
+        // Game variables
+        let keys = {};
+
+        // Initialize everything
+        document.addEventListener('DOMContentLoaded', async () => {
+            await gamefiSDK.initialize();
+            setupEventListeners();
+            gameLoop();
+        });
+
+        function setupEventListeners() {
+            document.getElementById('connect-wallet-btn').addEventListener('click', async () => {
+                try {
+                    await gamefiSDK.connectWallet();
+                } catch (error) {
+                    showNotification('Connection failed: ' + error.message, 'error');
+                }
+            });
+
+            document.getElementById('demo-mode-btn').addEventListener('click', () => {
+                hideGameOverlay();
+                showNotification('Demo mode active! Connect wallet for full experience.', 'info');
+            });
+
+            document.addEventListener('keydown', handleKeyDown);
+            document.addEventListener('keyup', handleKeyUp);
+
+            window.addEventListener('keydown', (e) => {
+                if(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) {
+                    e.preventDefault();
+                }
+            });
+        }
+
+        function handleKeyDown(e) {
+            keys[e.key] = true;
+            
+            if (gameState === 'menu' && e.key === ' ') {
+                startGame();
+            } else if (gameState === 'playing' && e.key === 'Escape') {
+                pauseGame();
+            } else if (gameState === 'paused' && e.key === 'Escape') {
+                resumeGame();
+            } else if (gameState === 'gameOver' && e.key === ' ') {
+                resetGame();
+            }
+        }
+
+        function handleKeyUp(e) {
+            keys[e.key] = false;
+        }
+
+        async function startGame() {
+            const userData = gamefiSDK.getUserData();
+            
+            if (!userData) {
+                showNotification('Please connect your wallet to play!', 'error');
+                return;
+            }
+            
+            if (userData.totalLives <= 0) {
+                showNotification('No lives available! Purchase more lives.', 'error');
+                return;
+            }
+
+            try {
+                await gamefiSDK.startGameSession();
+                
+                gameState = 'playing';
+                score = 0;
+                gameStartTime = Date.now();
+                
+                bullets = [];
+                asteroids = [];
+                particles = [];
+                player.x = canvas.width / 2;
+                player.y = canvas.height - 50;
+                
+                updateScore();
+                
+            } catch (error) {
+                showNotification(error.message, 'error');
+            }
+        }
+
+        function pauseGame() {
+            if (gameState === 'playing') {
+                gameState = 'paused';
+                showNotification('Game paused - Press ESC to resume', 'info');
+            }
+        }
+
+        function resumeGame() {
+            if (gameState === 'paused') {
+                gameState = 'playing';
+            }
+        }
+
+        async function endGame() {
+            if (gameState !== 'playing') return;
+            
+            gameState = 'gameOver';
+            const finalScore = score;
+            
+            createExplosion(player.x, player.y, '#ff4444', 30);
+            
+            try {
+                await gamefiSDK.endGameSession(finalScore, {
+                    asteroidsDestroyed: Math.floor(finalScore / 10),
+                    survivalTime: (Date.now() - gameStartTime) / 1000
+                });
+                
+                showGameOverOverlay(finalScore);
+                
+            } catch (error) {
+                showNotification('Score submission failed', 'error');
+                showGameOverOverlay(finalScore);
+            }
+        }
+
+        function resetGame() {
+            gameState = 'menu';
+            hideGameOverlay();
+        }
+
+        function updateScore() {
+            document.getElementById('current-score').textContent = score.toLocaleString();
+        }
+
+        function updateHighScore() {
+            const userData = gamefiSDK.getUserData();
+            if (userData) {
+                document.getElementById('high-score').textContent = userData.highScore.toLocaleString();
+            }
+        }
+
+        function gameLoop() {
+            update();
+            render();
+            requestAnimationFrame(gameLoop);
+        }
+
+        function update() {
+            if (gameState !== 'playing') return;
+
+            // Update player
+            if (keys['ArrowLeft'] && player.x > 0) {
+                player.x -= player.speed;
+            }
+            if (keys['ArrowRight'] && player.x < canvas.width - player.width) {
+                player.x += player.speed;
+            }
+
+            // Shooting
+            if (keys[' '] && Date.now() - (window.lastShot || 0) > 200) {
+                bullets.push({
+                    x: player.x + player.width / 2,
+                    y: player.y,
+                    width: 3,
+                    height: 10,
+                    speed: 8
+                });
+                window.lastShot = Date.now();
+                gamefiSDK.trackMove({ type: 'shoot', x: player.x });
+            }
+
+            // Update bullets
+            bullets = bullets.filter(bullet => {
+                bullet.y -= bullet.speed;
+                return bullet.y > -bullet.height;
+            });
+
+            // Spawn asteroids
+            if (Date.now() - lastAsteroidSpawn > 1500) {
+                asteroids.push({
+                    x: Math.random() * (canvas.width - 40),
+                    y: -40,
+                    width: 20 + Math.random() * 20,
+                    height: 20 + Math.random() * 20,
+                    speed: 1 + Math.random() * 3
+                });
+                lastAsteroidSpawn = Date.now();
+            }
+
+            // Update asteroids
+            asteroids = asteroids.filter(asteroid => {
+                asteroid.y += asteroid.speed;
+                return asteroid.y < canvas.height + asteroid.height;
+            });
+
+            // Check collisions
+            checkCollisions();
+
+            // Update particles
+            particles = particles.filter(particle => {
+                particle.x += particle.vx;
+                particle.y += particle.vy;
+                particle.life--;
+                return particle.life > 0;
+            });
+        }
+
+        function checkCollisions() {
+            // Bullet-asteroid collisions
+            bullets.forEach((bullet, bulletIndex) => {
+                asteroids.forEach((asteroid, asteroidIndex) => {
+                    if (bullet.x < asteroid.x + asteroid.width &&
+                        bullet.x + bullet.width > asteroid.x &&
+                        bullet.y < asteroid.y + asteroid.height &&
+                        bullet.y + bullet.height > asteroid.y) {
+                        
+                        bullets.splice(bulletIndex, 1);
+                        asteroids.splice(asteroidIndex, 1);
+                        
+                        score += 10;
+                        updateScore();
+                        
+                        createExplosion(asteroid.x + asteroid.width/2, asteroid.y + asteroid.height/2, '#00ff88', 8);
+                        gamefiSDK.trackMove({ type: 'hit', score: score });
+                    }
+                });
+            });
+
+            // Player-asteroid collisions
+            asteroids.forEach(asteroid => {
+                if (player.x < asteroid.x + asteroid.width &&
+                    player.x + player.width > asteroid.x &&
+                    player.y < asteroid.y + asteroid.height &&
+                    player.y + player.height > asteroid.y) {
+                    
+                    endGame();
+                }
+            });
+        }
+
+        function createExplosion(x, y, color, count) {
+            for (let i = 0; i < count; i++) {
+                particles.push({
+                    x: x,
+                    y: y,
+                    vx: (Math.random() - 0.5) * 6,
+                    vy: (Math.random() - 0.5) * 6,
+                    color: color,
+                    life: 20,
+                    size: Math.random() * 3 + 1
+                });
+            }
+        }
+
+        function render() {
+            // Clear canvas
+            ctx.fillStyle = '#000011';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            if (gameState === 'playing' || gameState === 'paused') {
+                // Draw player
+                ctx.fillStyle = '#00ff88';
+                ctx.fillRect(player.x, player.y, player.width, player.height);
+
+                // Draw bullets
+                ctx.fillStyle = '#00d4ff';
+                bullets.forEach(bullet => {
+                    ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
+                });
+
+                // Draw asteroids
+                ctx.fillStyle = '#ff6b35';
+                asteroids.forEach(asteroid => {
+                    ctx.fillRect(asteroid.x, asteroid.y, asteroid.width, asteroid.height);
+                });
+
+                // Draw particles
+                particles.forEach(particle => {
+                    ctx.fillStyle = particle.color;
+                    ctx.fillRect(particle.x, particle.y, particle.size, particle.size);
+                });
+
+                // Draw pause overlay
+                if (gameState === 'paused') {
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    
+                    ctx.fillStyle = '#ffffff';
+                    ctx.font = '36px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('PAUSED', canvas.width/2, canvas.height/2);
+                    ctx.font = '16px Arial';
+                    ctx.fillText('Press ESC to resume', canvas.width/2, canvas.height/2 + 40);
+                }
+            }
+        }
+
+        function showGameOverOverlay(finalScore) {
+            const overlay = document.getElementById('game-overlay');
+            overlay.innerHTML = `
+                <h2>🚀 Game Over!</h2>
+                <p>
+                    Final Score: <strong>${finalScore.toLocaleString()}</strong><br>
+                    Well played, space pilot!
+                </p>
+                <div>
+                    <button class="game-button" onclick="startGame()">🔄 Play Again</button>
+                    <button class="game-button secondary" onclick="showLeaderboard()">🏆 Leaderboard</button>
+                    <button class="game-button secondary" onclick="buyLives()">❤️ Buy Lives</button>
+                </div>
+                <div style="margin-top: 20px;">
+                    <button class="game-button secondary" onclick="resetGame()">📱 Back to Menu</button>
+                </div>
+            `;
+            overlay.style.display = 'block';
+        }
+
+        function hideGameOverlay() {
+            document.getElementById('game-overlay').style.display = 'none';
+        }
+
+        async function showLeaderboard() {
+            try {
+                const leaderboard = await gamefiSDK.getLeaderboard();
+                let text = '🏆 Daily Leaderboard:\n\n';
+                leaderboard.slice(0, 10).forEach((entry, index) => {
+                    text += `${index + 1}. ${entry.walletAddress.slice(0, 8)}... - ${entry.score.toLocaleString()} points\n`;
+                });
+                alert(text);
+            } catch (error) {
+                showNotification('Failed to load leaderboard', 'error');
+            }
+        }
+
+        function buyLives() {
+            gamefiSDK.buyLives();
+        }
+
+        function showNotification(message, type = 'info') {
+            const existing = document.querySelector('.notification');
+            if (existing) existing.remove();
+
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.textContent = message;
+            document.body.appendChild(notification);
+
+            setTimeout(() => notification.remove(), 4000);
+        }
+
+        // Expose functions globally
+        window.startGame = startGame;
+        window.showLeaderboard = showLeaderboard;
+        window.buyLives = buyLives;
+        window.resetGame = resetGame;
+    </script>
+</body>
+</html> 

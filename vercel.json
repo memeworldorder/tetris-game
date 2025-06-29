@@ -1,0 +1,56 @@
+{
+  "framework": "nextjs",
+  "buildCommand": "npm run build",
+  "devCommand": "npm run dev",
+  "installCommand": "npm install --legacy-peer-deps",
+  "functions": {
+    "app/api/**/*.ts": {
+      "maxDuration": 30
+    },
+    "app/api/endRound/route.ts": {
+      "maxDuration": 45
+    },
+    "app/api/resetMidnight/route.ts": {
+      "maxDuration": 60
+    }
+  },
+  "crons": [
+    {
+      "path": "/api/resetMidnight",
+      "schedule": "0 0 * * *"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "*"
+        },
+        {
+          "key": "Access-Control-Allow-Methods",
+          "value": "GET, POST, PUT, DELETE, OPTIONS"
+        },
+        {
+          "key": "Access-Control-Allow-Headers",
+          "value": "Content-Type, Authorization"
+        }
+      ]
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/api/hel/trx",
+      "destination": "/api/hel/trx"
+    }
+  ],
+  "env": {
+    "NODE_ENV": "production",
+    "NEXT_PUBLIC_GAME_NAME": "TetrisWar",
+    "NEXT_PUBLIC_DAILY_LIVES": "5",
+    "NEXT_PUBLIC_LIFE_COST_SOL": "0.001",
+    "NEXT_PUBLIC_SOLANA_NETWORK": "mainnet-beta"
+  },
+  "regions": ["iad1"]
+} 
