@@ -341,6 +341,52 @@ services:
       retries: 3
     restart: unless-stopped
 
+  telegram-game-bot:
+    build: ./services/telegram-game-bot
+    ports:
+      - "3020:3020"
+    environment:
+      - NODE_ENV=development
+      - PORT=3020
+      - DATABASE_URL=postgresql://gamefi_user:gamefi_password@postgres:5432/gamefi_platform
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://gamefi:gamefi_queue@rabbitmq:5672/gamefi_vhost
+      - TELEGRAM_BOT_TOKEN=your-telegram-bot-token
+      - TELEGRAM_CHAT_ID=your-telegram-chat-id
+      - TELEGRAM_CHANNEL_ID=your-telegram-channel-id
+      - TELEGRAM_ADMIN_CHAT_ID=your-admin-chat-id
+      - WEBHOOKS_ENABLED=true
+      - WEBHOOK_SECRET=telegram-game-webhook-secret
+      - WEBHOOK_GAME_START=http://example.com/webhooks/game-start
+      - WEBHOOK_GAME_END=http://example.com/webhooks/game-end
+      - WEBHOOK_PLAYER_JOIN=http://example.com/webhooks/player-join
+      - WEBHOOK_NUMBER_SELECTED=http://example.com/webhooks/number-selected
+      - WEBHOOK_WINNER_SELECTED=http://example.com/webhooks/winner-selected
+      - PICK_NUMBER_TIME_LIMIT=300
+      - PICK_NUMBER_MIN_PLAYERS=2
+      - PICK_NUMBER_MAX_PLAYERS=100
+      - PICK_NUMBER_MULTIPLIER=5.0
+      - PICK_NUMBER_JOIN_TIME=60
+      - PICK_NUMBER_ANNOUNCE_INTERVAL=30
+      - ADMIN_SECRET=telegram-game-admin-secret
+      - CORS_ORIGINS=*
+      - SERVICE_NAME=telegram-game-bot
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3020/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    volumes:
+      - ./services/telegram-game-bot/database-schema.sql:/docker-entrypoint-initdb.d/03-telegram-game-bot-schema.sql
+
   # ======================
   # Background Services
   # ======================
