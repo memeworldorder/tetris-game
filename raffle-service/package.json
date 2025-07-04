@@ -14,13 +14,15 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.39.5",
     "node-fetch": "^3.3.2",
-    "zod": "^3.23.8"
+    "zod": "^3.23.8",
+    "@solana/web3.js": "^1.92.1"
   },
   "devDependencies": {
     "typescript": "^5.4.2",
     "ts-node": "^10.9.2",
     "eslint": "^8.56.0",
-    "vitest": "^0.34.1"
+    "vitest": "^0.34.1",
+    "@types/node": "^20.11.19"
   },
   "engines": {
     "node": ">=18"
