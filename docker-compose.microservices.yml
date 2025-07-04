@@ -22,6 +22,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./shared/database/init.sql:/docker-entrypoint-initdb.d/01-init.sql
       - ./shared/database/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql
+      - ./services/telegram-game-bot/database-schema.sql:/docker-entrypoint-initdb.d/03-telegram-game-bot-schema.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U gamefi_user -d gamefi_platform"]
       interval: 5s
@@ -401,8 +402,6 @@ services:
       timeout: 10s
       retries: 3
     restart: unless-stopped
-    volumes:
-      - ./services/telegram-game-bot/database-schema.sql:/docker-entrypoint-initdb.d/03-telegram-game-bot-schema.sql
 
   # ======================
   # Background Services

@@ -3,6 +3,7 @@ import GameService from '@/services/game-service';
 import WebhookService from '@/services/webhook-service';
 import Database from '@/models/database';
 import RedisService from '@/services/redis-service';
+import config from '@/config/config';
 
 const router = Router();
 const gameService = new GameService();
@@ -12,10 +13,11 @@ const redis = RedisService.getInstance();
 
 // Middleware to check admin authentication
 const requireAdmin = (req: Request, res: Response, next: any) => {
-  const adminSecret = req.headers['x-admin-secret'];
+  const adminSecretHeader = req.headers['x-admin-secret'];
+  const adminSecret = Array.isArray(adminSecretHeader) ? adminSecretHeader[0] : adminSecretHeader;
   const userRole = req.headers['x-user-role'];
   
-  if (adminSecret !== 'admin-secret' && userRole !== 'admin') {
+  if (adminSecret !== config.security.adminSecret && userRole !== 'admin') {
     return res.status(401).json({
       error: 'Unauthorized',
       message: 'Admin access required'

@@ -74,7 +74,7 @@ export class GameService {
     await this.redis.setGame(gameId, game);
 
     // Send webhook
-    await this.webhook.sendWebhook('GAME_START', { game });
+    await this.webhook.sendWebhook('gameStart', { game });
 
     return game;
   }
@@ -154,7 +154,7 @@ export class GameService {
     await this.redis.setGame(request.gameId, game);
 
     // Send webhook
-    await this.webhook.sendWebhook('PLAYER_JOIN', { game, player, participant });
+    await this.webhook.sendWebhook('playerJoin', { game, player, participant });
 
     // Check if we should auto-start the game
     if (game.settings.pickNumber?.autoStart && game.total_players >= game.min_players) {
@@ -227,7 +227,7 @@ export class GameService {
     });
 
     // Send webhook
-    await this.webhook.sendWebhook('NUMBER_SELECTED', { 
+    await this.webhook.sendWebhook('numberSelected', { 
       game, 
       playerId: request.playerId, 
       number: request.number 
@@ -321,34 +321,28 @@ export class GameService {
     }
   }
 
-  private async selectWinners(gameId: string, selections: NumberSelection[], settings: PickNumberSettings): Promise<string[]> {
-    const maxNumbers = Math.max(...selections.map(s => s.number));
-    const minNumbers = Math.min(...selections.map(s => s.number));
-    
-    const winners: string[] = [];
-    let attempts = 0;
-    const maxAttempts = 100;
+  private async selectWinners(
+    _gameId: string,
+    selections: NumberSelection[],
+    settings: PickNumberSettings
+  ): Promise<string[]> {
+    // Extract unique player IDs from the selections
+    const uniquePlayerIds = Array.from(new Set(selections.map(s => s.player_id)));
 
-    while (winners.length < settings.maxWinners && attempts < maxAttempts) {
-      // Generate random number in the range
-      const winningNumber = Math.floor(Math.random() * (maxNumbers - minNumbers + 1)) + minNumbers;
-      
-      // Find players who selected this number
-      const winnersForNumber = selections
-        .filter(s => s.number === winningNumber && !winners.includes(s.player_id))
-        .map(s => s.player_id);
-
-      winners.push(...winnersForNumber);
-      attempts++;
+    // Edge-case: If the total unique players is less than or equal to the requested winners,
+    // simply return them all.
+    if (uniquePlayerIds.length <= settings.maxWinners) {
+      return uniquePlayerIds;
     }
 
-    // If no exact matches, select random participants
-    if (winners.length === 0) {
-      const randomSelection = selections[Math.floor(Math.random() * selections.length)];
-      winners.push(randomSelection.player_id);
+    // Fisher-Yates shuffle to randomly order the players
+    for (let i = uniquePlayerIds.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [uniquePlayerIds[i], uniquePlayerIds[j]] = [uniquePlayerIds[j], uniquePlayerIds[i]];
     }
 
-    return winners.slice(0, settings.maxWinners);
+    // Return the first N shuffled player IDs as winners
+    return uniquePlayerIds.slice(0, settings.maxWinners);
   }
 
   private async completeGame(gameId: string, winnerIds: string[]): Promise<void> {
@@ -390,8 +384,8 @@ export class GameService {
 
     // Send webhook
     const game = await this.getGame(gameId);
-    await this.webhook.sendWebhook('WINNER_SELECTED', { game, winners: winnerIds });
-    await this.webhook.sendWebhook('GAME_END', { game, winners: winnerIds });
+    await this.webhook.sendWebhook('winnerSelected', { game, winners: winnerIds });
+    await this.webhook.sendWebhook('gameEnd', { game, winners: winnerIds });
   }
 
   private async cancelGame(gameId: string, reason: string): Promise<void> {
@@ -410,7 +404,7 @@ export class GameService {
     await this.redis.deleteGame(gameId);
 
     const game = await this.getGame(gameId);
-    await this.webhook.sendWebhook('GAME_CANCELLED', { game, reason });
+    await this.webhook.sendWebhook('gameEnd', { game, reason });
   }
 
   // Helper methods

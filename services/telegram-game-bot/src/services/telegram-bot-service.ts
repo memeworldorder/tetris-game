@@ -65,7 +65,7 @@ export class TelegramBotService {
     );
 
     // Handle text messages
-    this.bot.on('message', async (msg) => {
+    this.bot.on('message', async (msg: TelegramBot.Message) => {
       try {
         await this.handleMessage(msg);
       } catch (error) {
@@ -75,7 +75,7 @@ export class TelegramBotService {
     });
 
     // Handle callback queries (inline keyboard buttons)
-    this.bot.on('callback_query', async (callbackQuery) => {
+    this.bot.on('callback_query', async (callbackQuery: TelegramBot.CallbackQuery) => {
       try {
         await this.handleCallbackQuery(callbackQuery);
       } catch (error) {
@@ -88,7 +88,7 @@ export class TelegramBotService {
     });
 
     // Error handling
-    this.bot.on('error', (error) => {
+    this.bot.on('error', (error: Error) => {
       console.error('Telegram bot error:', error);
     });
 
@@ -186,9 +186,13 @@ export class TelegramBotService {
 
     if (!chatId || !data) return;
 
-    await this.bot.answerCallbackQuery(callbackQuery.id);
+    // Prevent duplicate acknowledgements: let specific handlers respond when needed.
+    const [action] = (data || '').split(':');
+    if (action !== 'quiz_answer') {
+      await this.bot.answerCallbackQuery(callbackQuery.id);
+    }
 
-    const [action, ...params] = data.split(':');
+    const [, ...params] = data.split(':');
 
     switch (action) {
       case 'join_game':
@@ -209,7 +213,7 @@ export class TelegramBotService {
         break;
       case 'quiz_answer':
         const [quizGameId, questionNumber, answer] = params;
-        await this.processQuizAnswer(chatId, userId, quizGameId, parseInt(questionNumber), parseInt(answer));
+        await this.processQuizAnswer(chatId, userId, callbackQuery.id, quizGameId, parseInt(questionNumber), parseInt(answer));
         break;
     }
   }
@@ -427,6 +431,7 @@ Choose a number below or type it in chat:
   private async processQuizAnswer(
     chatId: number,
     userId: number,
+    callbackQueryId: string,
     gameId: string,
     questionNumber: number,
     selectedAnswer: number
@@ -434,7 +439,7 @@ Choose a number below or type it in chat:
     // Get player ID from database
     const player = await this.getPlayerByTelegramId(userId);
     if (!player) {
-      await this.bot.answerCallbackQuery('', {
+      await this.bot.answerCallbackQuery(callbackQueryId, {
         text: 'You need to join the game first!',
         show_alert: true
       });
@@ -453,12 +458,12 @@ Choose a number below or type it in chat:
         ? '✅ Correct! Well done!' 
         : `❌ Wrong! The correct answer was option ${(result.correctAnswer || 0) + 1}`;
       
-      await this.bot.answerCallbackQuery('', {
+      await this.bot.answerCallbackQuery(callbackQueryId, {
         text,
         show_alert: true
       });
     } else {
-      await this.bot.answerCallbackQuery('', {
+      await this.bot.answerCallbackQuery(callbackQueryId, {
         text: '⏰ Too late or already answered!',
         show_alert: false
       });
