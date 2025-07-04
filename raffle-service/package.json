@@ -1,0 +1,29 @@
+{
+  "name": "raffle-service",
+  "version": "0.1.0",
+  "description": "Microservice responsible for raffle logic, VRF integration, and Telegram announcements.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "dev": "ts-node src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "lint": "eslint . --ext .ts",
+    "test": "vitest"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.5",
+    "node-fetch": "^3.3.2",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.2",
+    "ts-node": "^10.9.2",
+    "eslint": "^8.56.0",
+    "vitest": "^0.34.1"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT"
+}
