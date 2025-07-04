@@ -19,8 +19,8 @@ import webhookRoutes from '@/routes/webhook-routes';
 
 class TelegramGameBotServer {
   private app: express.Application;
-  private server: Server;
-  private io: SocketIOServer;
+  private server!: Server;
+  private io!: SocketIOServer;
   private database: typeof Database;
   private redis: RedisService;
   private telegramBot: TelegramBotService;
