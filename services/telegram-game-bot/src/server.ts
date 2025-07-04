@@ -200,13 +200,13 @@ class TelegramGameBotServer {
     });
 
     // Handle uncaught exceptions
-    process.on('uncaughtException', (error) => {
+    process.on('uncaughtException', (error: Error) => {
       console.error('Uncaught Exception:', error);
       this.gracefulShutdown('uncaughtException');
     });
 
     // Handle unhandled promise rejections
-    process.on('unhandledRejection', (reason, promise) => {
+    process.on('unhandledRejection', (reason: unknown, promise: Promise<unknown>) => {
       console.error('Unhandled Rejection at:', promise, 'reason:', reason);
       this.gracefulShutdown('unhandledRejection');
     });
@@ -348,7 +348,7 @@ class TelegramGameBotServer {
 // Start the server if this file is run directly
 if (require.main === module) {
   const server = new TelegramGameBotServer();
-  server.start().catch((error) => {
+  server.start().catch((error: unknown) => {
     console.error('Failed to start server:', error);
     process.exit(1);
   });
