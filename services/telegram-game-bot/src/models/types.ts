@@ -92,8 +92,8 @@ export interface WebhookEvent {
 
 export enum GameType {
   PICK_NUMBER = 'pick_number',
+  QUIZ = 'quiz',
   // Future game types can be added here
-  // TRIVIA = 'trivia',
   // LOTTERY = 'lottery'
 }
 
@@ -139,7 +139,7 @@ export enum WebhookStatus {
 
 export interface GameSettings {
   pickNumber?: PickNumberSettings;
-  // Future game settings can be added here
+  quiz?: QuizSettings;
 }
 
 export interface PickNumberSettings {
@@ -161,6 +161,71 @@ export interface PickNumberSettings {
     currency: string;
     distribution: 'equal' | 'weighted';
   };
+}
+
+export interface QuizSettings {
+  questionCount: number;
+  timePerQuestion: number; // seconds per question
+  joinTimeLimit: number; // seconds for joining phase
+  minPlayers: number;
+  maxPlayers: number;
+  difficulty: 'easy' | 'medium' | 'hard';
+  categories?: string[]; // Quiz categories/topics
+  announceInterval: number;
+  autoStart: boolean;
+  enablePrizes: boolean;
+  prizePool?: {
+    amount: number;
+    currency: string;
+    tokenAddress?: string;
+    distribution: 'winner-takes-all' | 'top-3' | 'percentage';
+  };
+  requiresWalletVerification: boolean;
+}
+
+export interface QuizQuestion {
+  id: string;
+  gameId: string;
+  questionNumber: number;
+  question: string;
+  options: string[];
+  correctAnswer: number; // index of correct answer
+  category?: string;
+  difficulty?: string;
+  timeLimit: number;
+  createdAt: Date;
+}
+
+export interface QuizAnswer {
+  id: string;
+  gameId: string;
+  playerId: string;
+  questionId: string;
+  selectedAnswer: number;
+  isCorrect: boolean;
+  timeToAnswer: number; // milliseconds
+  answeredAt: Date;
+}
+
+export interface QuizParticipant extends GameParticipant {
+  score: number;
+  correctAnswers: number;
+  totalAnswers: number;
+  averageResponseTime: number;
+  currentStreak: number;
+  maxStreak: number;
+}
+
+export interface WalletVerification {
+  id: string;
+  playerId: string;
+  walletAddress: string;
+  tokenAddress: string;
+  tokenSymbol: string;
+  tokenBalance: number;
+  isVerified: boolean;
+  verifiedAt: Date;
+  lastCheckedAt: Date;
 }
 
 export interface GameCreationRequest {

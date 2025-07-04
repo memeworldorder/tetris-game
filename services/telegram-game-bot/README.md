@@ -6,6 +6,7 @@ A dedicated microservice for running community games through Telegram with webho
 
 ### 🎮 Game Types
 - **Pick Your Number**: Players join a raffle and select numbers, with random winner selection
+- **Quiz Game**: AI-powered trivia quiz with OpenAI integration, real-time scoring, and prize pools
 - Extensible architecture for adding more game types
 
 ### 🤖 Telegram Bot Integration
@@ -31,6 +32,8 @@ A dedicated microservice for running community games through Telegram with webho
 - Rate limiting and security middleware
 - Health checks and monitoring
 - Graceful shutdown and error handling
+- Solana wallet verification for prize eligibility
+- OpenAI integration for dynamic quiz generation
 
 ## Quick Start
 
@@ -53,6 +56,15 @@ WEBHOOKS_ENABLED=true
 WEBHOOK_SECRET=your-webhook-secret
 WEBHOOK_GAME_START=https://yourapi.com/webhooks/game-start
 WEBHOOK_GAME_END=https://yourapi.com/webhooks/game-end
+
+# OpenAI Configuration (required for quiz games)
+OPENAI_API_KEY=your-openai-api-key
+OPENAI_MODEL=gpt-4-turbo-preview
+
+# Solana Configuration (required for wallet verification)
+SOLANA_RPC_URL=https://api.mainnet-beta.solana.com
+MWOR_TOKEN_ADDRESS=EoRe4xECTe9imaYtwfdmrGoinD2S1N5yMeu1LrjQpump
+MIN_TOKEN_BALANCE=1
 ```
 
 ### 2. Get Telegram Bot Token
@@ -90,11 +102,13 @@ curl http://localhost:3020/health/detailed
 - `/join` - Join the current active game
 - `/status` - Check current game status
 - `/stats` - View your game statistics
+- `/verify [wallet_address]` - Verify your Solana wallet for prize eligibility
 
 ### Admin Commands (for chat administrators)
 - `/create_game [title]` - Create a new pick-your-number game
+- `/start_quiz [questions] [time] [players]` - Start a quiz game
 - `/cancel_game` - Cancel the current active game
-- `/game_settings` - Configure game parameters
+- `/settings` - Configure game parameters
 
 ## Game Flow: Pick Your Number
 
@@ -111,6 +125,25 @@ curl http://localhost:3020/health/detailed
 - **Min/Max Players**: Game requirements (default: 2-100)
 - **Number Range**: Auto-calculated as 5x player count
 - **Winners**: Usually 1, configurable
+
+## Game Flow: Quiz Game
+
+1. **Game Creation**: Admin creates quiz with `/start_quiz 20 15 10`
+   - 20 questions, 15 seconds per question, max 10 players
+2. **Wallet Verification**: Players must verify wallet with `/verify`
+3. **Player Joining**: Players join with `/join` or inline button
+4. **Question Generation**: OpenAI generates trivia questions
+5. **Real-time Quiz**: Questions sent one by one with time limits
+6. **Scoring**: Points for correct answers + speed bonus
+7. **Winners**: Top 3 players split the prize pool (50%, 30%, 20%)
+
+### Quiz Features
+- **AI-Generated Questions**: Fresh content every game via OpenAI
+- **Categories**: Various topics for diverse gameplay
+- **Difficulty Levels**: Easy, Medium, Hard
+- **Speed Bonus**: Faster correct answers earn more points
+- **Prize Distribution**: Automatic MWOR token distribution to winners
+- **Live Leaderboard**: Real-time score updates
 
 ## API Endpoints
 

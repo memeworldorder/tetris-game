@@ -60,6 +60,17 @@ export const config = {
       maxNumbers: parseInt(process.env.PICK_NUMBER_MAX_NUMBERS || '1000', 10),
       joinTimeLimit: parseInt(process.env.PICK_NUMBER_JOIN_TIME || '60', 10), // 1 minute to join
       announceInterval: parseInt(process.env.PICK_NUMBER_ANNOUNCE_INTERVAL || '30', 10) // 30 seconds
+    },
+    quiz: {
+      defaultQuestionCount: parseInt(process.env.QUIZ_DEFAULT_QUESTIONS || '20', 10),
+      defaultTimePerQuestion: parseInt(process.env.QUIZ_TIME_PER_QUESTION || '15', 10), // 15 seconds
+      minPlayers: parseInt(process.env.QUIZ_MIN_PLAYERS || '2', 10),
+      maxPlayers: parseInt(process.env.QUIZ_MAX_PLAYERS || '50', 10),
+      joinTimeLimit: parseInt(process.env.QUIZ_JOIN_TIME || '60', 10), // 1 minute to join
+      announceInterval: parseInt(process.env.QUIZ_ANNOUNCE_INTERVAL || '30', 10), // 30 seconds
+      defaultDifficulty: process.env.QUIZ_DEFAULT_DIFFICULTY || 'medium',
+      prizePoolAmount: parseFloat(process.env.QUIZ_PRIZE_POOL || '100'),
+      prizePoolCurrency: process.env.QUIZ_PRIZE_CURRENCY || 'MWOR'
     }
   },
   
@@ -96,6 +107,23 @@ export const config = {
   logging: {
     level: process.env.LOG_LEVEL || 'info',
     prettyPrint: process.env.NODE_ENV === 'development'
+  },
+  
+  // OpenAI configuration
+  openai: {
+    apiKey: process.env.OPENAI_API_KEY || '',
+    model: process.env.OPENAI_MODEL || 'gpt-4-turbo-preview',
+    maxTokens: parseInt(process.env.OPENAI_MAX_TOKENS || '1000', 10),
+    temperature: parseFloat(process.env.OPENAI_TEMPERATURE || '0.7')
+  },
+  
+  // Solana configuration
+  solana: {
+    rpcUrl: process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com',
+    tokenAddress: process.env.MWOR_TOKEN_ADDRESS || 'EoRe4xECTe9imaYtwfdmrGoinD2S1N5yMeu1LrjQpump',
+    tokenSymbol: 'MWOR',
+    minTokenBalance: parseFloat(process.env.MIN_TOKEN_BALANCE || '1'), // Minimum tokens to verify
+    verificationCacheDuration: parseInt(process.env.VERIFICATION_CACHE_DURATION || '3600', 10) // 1 hour
   }
 };
 

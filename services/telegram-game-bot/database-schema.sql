@@ -98,6 +98,49 @@ CREATE TABLE IF NOT EXISTS webhook_events (
     error_message TEXT
 );
 
+-- Quiz questions table
+CREATE TABLE IF NOT EXISTS quiz_questions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    game_id UUID NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+    question_number INTEGER NOT NULL,
+    question TEXT NOT NULL,
+    options JSONB NOT NULL,
+    correct_answer INTEGER NOT NULL,
+    category VARCHAR(100),
+    difficulty VARCHAR(50),
+    time_limit INTEGER DEFAULT 15,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(game_id, question_number)
+);
+
+-- Quiz answers table
+CREATE TABLE IF NOT EXISTS quiz_answers (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    game_id UUID NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+    player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+    question_id UUID NOT NULL REFERENCES quiz_questions(id) ON DELETE CASCADE,
+    selected_answer INTEGER NOT NULL,
+    is_correct BOOLEAN NOT NULL DEFAULT false,
+    time_to_answer INTEGER NOT NULL, -- milliseconds
+    answered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(game_id, player_id, question_id)
+);
+
+-- Wallet verifications table
+CREATE TABLE IF NOT EXISTS wallet_verifications (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    player_id UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+    wallet_address VARCHAR(255) NOT NULL,
+    token_address VARCHAR(255) NOT NULL,
+    token_symbol VARCHAR(50) NOT NULL,
+    token_balance DECIMAL(30,9) DEFAULT 0,
+    is_verified BOOLEAN DEFAULT false,
+    verified_at TIMESTAMP,
+    last_checked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(player_id, wallet_address, token_address)
+);
+
 -- Indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_players_telegram_id ON players(telegram_user_id);
 CREATE INDEX IF NOT EXISTS idx_players_active ON players(is_active) WHERE is_active = true;
@@ -123,6 +166,19 @@ CREATE INDEX IF NOT EXISTS idx_game_history_action ON game_history(action);
 CREATE INDEX IF NOT EXISTS idx_webhook_events_status ON webhook_events(status);
 CREATE INDEX IF NOT EXISTS idx_webhook_events_created_at ON webhook_events(created_at);
 CREATE INDEX IF NOT EXISTS idx_webhook_events_game_id ON webhook_events(game_id);
+
+CREATE INDEX IF NOT EXISTS idx_quiz_questions_game_id ON quiz_questions(game_id);
+CREATE INDEX IF NOT EXISTS idx_quiz_questions_game_number ON quiz_questions(game_id, question_number);
+
+CREATE INDEX IF NOT EXISTS idx_quiz_answers_game_id ON quiz_answers(game_id);
+CREATE INDEX IF NOT EXISTS idx_quiz_answers_player_id ON quiz_answers(player_id);
+CREATE INDEX IF NOT EXISTS idx_quiz_answers_question_id ON quiz_answers(question_id);
+CREATE INDEX IF NOT EXISTS idx_quiz_answers_is_correct ON quiz_answers(is_correct) WHERE is_correct = true;
+
+CREATE INDEX IF NOT EXISTS idx_wallet_verifications_player_id ON wallet_verifications(player_id);
+CREATE INDEX IF NOT EXISTS idx_wallet_verifications_wallet ON wallet_verifications(wallet_address);
+CREATE INDEX IF NOT EXISTS idx_wallet_verifications_token ON wallet_verifications(token_address);
+CREATE INDEX IF NOT EXISTS idx_wallet_verifications_verified ON wallet_verifications(is_verified) WHERE is_verified = true;
 
 -- Functions and triggers for automatic timestamp updates
 CREATE OR REPLACE FUNCTION update_updated_at_column()

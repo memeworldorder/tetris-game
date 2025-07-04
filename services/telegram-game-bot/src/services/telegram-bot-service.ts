@@ -1,5 +1,7 @@
 import TelegramBot from 'node-telegram-bot-api';
 import GameService from './game-service';
+import QuizGameService from './quiz-game-service';
+import WalletVerificationService from './wallet-verification-service';
 import RedisService from './redis-service';
 import config from '@/config/config';
 import {
@@ -11,12 +13,15 @@ import {
   BotResponse,
   GameCreationRequest,
   PlayerJoinRequest,
-  NumberSelectionRequest
+  NumberSelectionRequest,
+  QuizQuestion
 } from '@/models/types';
 
 export class TelegramBotService {
   private bot: TelegramBot;
   private gameService: GameService;
+  private quizService: QuizGameService;
+  private walletService: WalletVerificationService;
   private redis: RedisService;
   private static instance: TelegramBotService;
   private commands: TelegramBotCommand[] = [
@@ -27,14 +32,18 @@ export class TelegramBotService {
     { command: 'games', description: 'List active games' },
     { command: 'stats', description: 'Show your game statistics' },
     { command: 'leaderboard', description: 'Show top players' },
+    { command: 'verify', description: 'Verify your Solana wallet for prize eligibility' },
     { command: 'create_game', description: 'Create a new pick number game', adminOnly: true },
+    { command: 'start_quiz', description: 'Start a quiz game', adminOnly: true },
     { command: 'cancel_game', description: 'Cancel an active game', adminOnly: true },
-    { command: 'game_settings', description: 'Configure game settings', adminOnly: true }
+    { command: 'settings', description: 'Configure game settings', adminOnly: true }
   ];
 
   private constructor() {
     this.bot = new TelegramBot(config.telegram.botToken, { polling: true });
     this.gameService = new GameService();
+    this.quizService = new QuizGameService();
+    this.walletService = WalletVerificationService.getInstance();
     this.redis = RedisService.getInstance();
     this.setupBot();
   }
@@ -150,14 +159,20 @@ export class TelegramBotService {
       case 'leaderboard':
         await this.handleLeaderboardCommand(chatId);
         break;
+      case 'verify':
+        await this.handleVerifyCommand(chatId, userId, msg.from!, args);
+        break;
       case 'create_game':
         await this.handleCreateGameCommand(chatId, userId, args);
+        break;
+      case 'start_quiz':
+        await this.handleStartQuizCommand(chatId, userId, args);
         break;
       case 'cancel_game':
         await this.handleCancelGameCommand(chatId, userId, args);
         break;
-      case 'game_settings':
-        await this.handleGameSettingsCommand(chatId, userId);
+      case 'settings':
+        await this.handleSettingsCommand(chatId, userId);
         break;
       default:
         await this.sendMessage(chatId, 'Unknown command. Type /help to see available commands.');
@@ -191,6 +206,10 @@ export class TelegramBotService {
       case 'refresh_game':
         const refreshGameId = params[0];
         await this.refreshGameStatus(chatId, refreshGameId);
+        break;
+      case 'quiz_answer':
+        const [quizGameId, questionNumber, answer] = params;
+        await this.processQuizAnswer(chatId, userId, quizGameId, parseInt(questionNumber), parseInt(answer));
         break;
     }
   }
@@ -405,7 +424,79 @@ Choose a number below or type it in chat:
     }
   }
 
+  private async processQuizAnswer(
+    chatId: number,
+    userId: number,
+    gameId: string,
+    questionNumber: number,
+    selectedAnswer: number
+  ): Promise<void> {
+    // Get player ID from database
+    const player = await this.getPlayerByTelegramId(userId);
+    if (!player) {
+      await this.bot.answerCallbackQuery('', {
+        text: 'You need to join the game first!',
+        show_alert: true
+      });
+      return;
+    }
+
+    const result = await this.quizService.submitAnswer(
+      gameId,
+      player.id,
+      questionNumber,
+      selectedAnswer
+    );
+
+    if (result.success) {
+      const text = result.isCorrect 
+        ? '✅ Correct! Well done!' 
+        : `❌ Wrong! The correct answer was option ${(result.correctAnswer || 0) + 1}`;
+      
+      await this.bot.answerCallbackQuery('', {
+        text,
+        show_alert: true
+      });
+    } else {
+      await this.bot.answerCallbackQuery('', {
+        text: '⏰ Too late or already answered!',
+        show_alert: false
+      });
+    }
+  }
+
   // Announcement methods
+  async announceQuizGame(chatId: number, game: Game): Promise<void> {
+    const settings = game.settings.quiz!;
+    
+    const message = `
+🎯 *Quiz Game Starting Soon!*
+
+📝 **${game.title}**
+${game.description || 'Test your knowledge and win prizes!'}
+
+🏆 **Prize Pool:** ${settings.prizePool?.amount} ${settings.prizePool?.currency}
+📊 **Questions:** ${settings.questionCount}
+⏱️ **Time per Question:** ${settings.timePerQuestion} seconds
+👥 **Players:** ${settings.minPlayers}-${settings.maxPlayers}
+
+💳 **Requirements:** Must verify wallet with ${config.solana.minTokenBalance} ${config.solana.tokenSymbol}
+
+The game will start in ${settings.joinTimeLimit} seconds!
+Use /join to participate!
+    `;
+
+    await this.sendMessage(chatId, message, {
+      parse_mode: 'Markdown',
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: '🎮 Join Quiz', callback_data: `join_game:${game.id}` }],
+          [{ text: '📊 Game Info', callback_data: `refresh_game:${game.id}` }]
+        ]
+      }
+    });
+  }
+
   async announceNewGame(chatId: number, game: Game): Promise<void> {
     const settings = game.settings.pickNumber!;
     
@@ -598,8 +689,175 @@ ${game.selection_deadline ? `⏰ **Selection Deadline:** ${game.selection_deadli
     await this.sendMessage(chatId, 'Cancel game feature coming soon!');
   }
 
-  private async handleGameSettingsCommand(chatId: number, userId: number): Promise<void> {
-    await this.sendMessage(chatId, 'Game settings feature coming soon!');
+  private async handleSettingsCommand(chatId: number, userId: number): Promise<void> {
+    // Check if user is admin
+    if (!await this.isUserAdmin(chatId, userId)) {
+      await this.sendMessage(chatId, 'Only admins can access settings.');
+      return;
+    }
+
+    const settingsMessage = `
+⚙️ *Game Settings*
+
+Current configuration:
+
+*Pick Number Game:*
+• Min Players: ${config.games.pickNumber.minPlayers}
+• Max Players: ${config.games.pickNumber.maxPlayers}
+• Time Limit: ${config.games.pickNumber.defaultTimeLimit}s
+
+*Quiz Game:*
+• Default Questions: ${config.games.quiz.defaultQuestionCount}
+• Time per Question: ${config.games.quiz.defaultTimePerQuestion}s
+• Min Players: ${config.games.quiz.minPlayers}
+• Max Players: ${config.games.quiz.maxPlayers}
+• Prize Pool: ${config.games.quiz.prizePoolAmount} ${config.games.quiz.prizePoolCurrency}
+
+*Token Requirements:*
+• Token: ${config.solana.tokenSymbol}
+• Min Balance: ${config.solana.minTokenBalance}
+
+Use specific commands to modify settings.
+    `;
+
+    await this.sendMessage(chatId, settingsMessage, {
+      parse_mode: 'Markdown'
+    });
+  }
+
+  private async handleVerifyCommand(chatId: number, userId: number, user: TelegramBot.User, args: string[]): Promise<void> {
+    if (args.length === 0) {
+      await this.sendMessage(chatId, 
+        '💳 Please provide your Solana wallet address:\n\n' +
+        'Usage: `/verify YOUR_WALLET_ADDRESS`\n\n' +
+        'Example: `/verify 7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZtq8Zq3NPe`',
+        { parse_mode: 'Markdown' }
+      );
+      return;
+    }
+
+    const walletAddress = args[0];
+    
+    // Validate wallet address format
+    if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(walletAddress)) {
+      await this.sendMessage(chatId, '❌ Invalid wallet address format. Please provide a valid Solana address.');
+      return;
+    }
+
+    await this.sendMessage(chatId, '🔄 Verifying your wallet...');
+
+    try {
+      // Get player
+      const player = await this.getPlayerByTelegramId(userId);
+      if (!player) {
+        await this.sendMessage(chatId, '❌ Player not found. Please join a game first.');
+        return;
+      }
+
+      // Verify wallet
+      const verification = await this.walletService.verifyWalletOwnership(
+        player.id,
+        walletAddress
+      );
+
+      if (verification.verified) {
+        const successMessage = `
+✅ *Wallet Verified Successfully!*
+
+📱 Wallet: \`${walletAddress.slice(0, 4)}...${walletAddress.slice(-4)}\`
+💰 ${config.solana.tokenSymbol} Balance: ${verification.balance.toFixed(2)}
+🎮 Status: Eligible for prize games
+
+You can now join quiz games with prize pools!
+        `;
+        
+        await this.sendMessage(chatId, successMessage, { parse_mode: 'Markdown' });
+      } else {
+        const failMessage = `
+❌ *Verification Failed*
+
+Your wallet doesn't meet the minimum requirements:
+• Required: ${config.solana.minTokenBalance} ${config.solana.tokenSymbol}
+• Your Balance: ${verification.balance.toFixed(2)} ${config.solana.tokenSymbol}
+
+Please ensure you have enough ${config.solana.tokenSymbol} tokens and try again.
+Token Address: \`${config.solana.tokenAddress}\`
+        `;
+        
+        await this.sendMessage(chatId, failMessage, { parse_mode: 'Markdown' });
+      }
+    } catch (error) {
+      console.error('Error verifying wallet:', error);
+      await this.sendMessage(chatId, '❌ Error verifying wallet. Please try again later.');
+    }
+  }
+
+  private async handleStartQuizCommand(chatId: number, userId: number, args: string[]): Promise<void> {
+    // Check if user is admin
+    if (!await this.isUserAdmin(chatId, userId)) {
+      await this.sendMessage(chatId, 'Only admins can start quiz games.');
+      return;
+    }
+
+    // Check if there's already an active game
+    const existingGame = await this.findActiveGameInChat(chatId.toString());
+    if (existingGame) {
+      await this.sendMessage(chatId, 'There is already an active game in this chat. Cancel it first with /cancel_game');
+      return;
+    }
+
+    // Parse arguments: /start_quiz [questions] [time_per_question] [max_players]
+    let questionCount = config.games.quiz.defaultQuestionCount;
+    let timePerQuestion = config.games.quiz.defaultTimePerQuestion;
+    let maxPlayers = config.games.quiz.maxPlayers;
+
+    if (args.length >= 1 && !isNaN(parseInt(args[0]))) {
+      questionCount = Math.min(Math.max(parseInt(args[0]), 5), 50); // 5-50 questions
+    }
+    if (args.length >= 2 && !isNaN(parseInt(args[1]))) {
+      timePerQuestion = Math.min(Math.max(parseInt(args[1]), 10), 60); // 10-60 seconds
+    }
+    if (args.length >= 3 && !isNaN(parseInt(args[2]))) {
+      maxPlayers = Math.min(Math.max(parseInt(args[2]), 2), 100); // 2-100 players
+    }
+
+    const title = `Quiz Game - ${questionCount} Questions`;
+    
+    const gameRequest: GameCreationRequest = {
+      type: GameType.QUIZ,
+      title,
+      description: 'Test your knowledge and win prizes!',
+      chatId: chatId.toString(),
+      settings: {
+        quiz: {
+          questionCount,
+          timePerQuestion,
+          joinTimeLimit: config.games.quiz.joinTimeLimit,
+          minPlayers: config.games.quiz.minPlayers,
+          maxPlayers,
+          difficulty: 'medium' as const,
+          announceInterval: config.games.quiz.announceInterval,
+          autoStart: true,
+          enablePrizes: true,
+          prizePool: {
+            amount: config.games.quiz.prizePoolAmount,
+            currency: config.games.quiz.prizePoolCurrency,
+            tokenAddress: config.solana.tokenAddress,
+            distribution: 'top-3'
+          },
+          requiresWalletVerification: true
+        }
+      }
+    };
+
+    try {
+      await this.sendMessage(chatId, '🎯 Creating quiz game...');
+      const game = await this.quizService.createQuizGame(gameRequest, userId.toString());
+      await this.announceQuizGame(chatId, game);
+    } catch (error) {
+      console.error('Error creating quiz game:', error);
+      await this.sendMessage(chatId, '❌ Failed to create quiz game. Please check if OpenAI API is configured.');
+    }
   }
 
   // Health check
