@@ -74,7 +74,7 @@ export class GameService {
     await this.redis.setGame(gameId, game);
 
     // Send webhook
-    await this.webhook.sendWebhook('GAME_START', { game });
+    await this.webhook.sendWebhook('gameStart', { game });
 
     return game;
   }
@@ -154,7 +154,7 @@ export class GameService {
     await this.redis.setGame(request.gameId, game);
 
     // Send webhook
-    await this.webhook.sendWebhook('PLAYER_JOIN', { game, player, participant });
+    await this.webhook.sendWebhook('playerJoin', { game, player, participant });
 
     // Check if we should auto-start the game
     if (game.settings.pickNumber?.autoStart && game.total_players >= game.min_players) {
@@ -227,7 +227,7 @@ export class GameService {
     });
 
     // Send webhook
-    await this.webhook.sendWebhook('NUMBER_SELECTED', { 
+    await this.webhook.sendWebhook('numberSelected', { 
       game, 
       playerId: request.playerId, 
       number: request.number 
@@ -384,8 +384,8 @@ export class GameService {
 
     // Send webhook
     const game = await this.getGame(gameId);
-    await this.webhook.sendWebhook('WINNER_SELECTED', { game, winners: winnerIds });
-    await this.webhook.sendWebhook('GAME_END', { game, winners: winnerIds });
+    await this.webhook.sendWebhook('winnerSelected', { game, winners: winnerIds });
+    await this.webhook.sendWebhook('gameEnd', { game, winners: winnerIds });
   }
 
   private async cancelGame(gameId: string, reason: string): Promise<void> {
@@ -404,7 +404,7 @@ export class GameService {
     await this.redis.deleteGame(gameId);
 
     const game = await this.getGame(gameId);
-    await this.webhook.sendWebhook('GAME_CANCELLED', { game, reason });
+    await this.webhook.sendWebhook('gameEnd', { game, reason });
   }
 
   // Helper methods

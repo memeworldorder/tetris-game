@@ -65,7 +65,7 @@ export class TelegramBotService {
     );
 
     // Handle text messages
-    this.bot.on('message', async (msg) => {
+    this.bot.on('message', async (msg: TelegramBot.Message) => {
       try {
         await this.handleMessage(msg);
       } catch (error) {
@@ -75,7 +75,7 @@ export class TelegramBotService {
     });
 
     // Handle callback queries (inline keyboard buttons)
-    this.bot.on('callback_query', async (callbackQuery) => {
+    this.bot.on('callback_query', async (callbackQuery: TelegramBot.CallbackQuery) => {
       try {
         await this.handleCallbackQuery(callbackQuery);
       } catch (error) {
