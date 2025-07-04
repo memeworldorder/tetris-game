@@ -161,6 +161,8 @@ export interface PickNumberSettings {
     currency: string;
     distribution: 'equal' | 'weighted';
   };
+  isReverseMode?: boolean; // When true, selected numbers eliminate players
+  prizeDistribution?: PrizeDistribution; // Custom prize distribution settings
 }
 
 export interface QuizSettings {
@@ -301,4 +303,26 @@ export interface AdminDashboardData {
     telegram: boolean;
     webhooks: boolean;
   };
+}
+
+// New types for enhanced prize distribution
+export interface PrizeDistribution {
+  totalPrizes: number; // 1-10 prizes
+  prizes: Prize[];
+  autoCalculate: boolean; // If true, calculate percentages automatically
+}
+
+export interface Prize {
+  position: number; // 1st, 2nd, 3rd, etc.
+  percentage: number; // Percentage of total prize pool
+  amount?: number; // Calculated amount based on percentage
+  winnerId?: string; // Filled when winner is determined
+}
+
+// For tracking available numbers in the UI
+export interface GameNumberState {
+  gameId: string;
+  availableNumbers: number[];
+  selectedNumbers: Map<number, string>; // number -> playerId
+  lastUpdated: Date;
 }

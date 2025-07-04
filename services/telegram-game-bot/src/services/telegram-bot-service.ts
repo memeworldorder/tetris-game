@@ -180,24 +180,37 @@ export class TelegramBotService {
   }
 
   private async handleCallbackQuery(callbackQuery: TelegramBot.CallbackQuery): Promise<void> {
-    const chatId = callbackQuery.message?.chat.id;
-    const userId = callbackQuery.from.id;
     const data = callbackQuery.data;
-
-    if (!chatId || !data) return;
-
-    await this.bot.answerCallbackQuery(callbackQuery.id);
+    if (!data) return;
 
     const [action, ...params] = data.split(':');
+    const chatId = callbackQuery.message!.chat.id;
+    const userId = callbackQuery.from.id;
+
+    try {
+      await this.bot.answerCallbackQuery(callbackQuery.id);
+    } catch (error) {
+      console.error('Error answering callback query:', error);
+    }
 
     switch (action) {
       case 'join_game':
-        const gameId = params[0];
-        await this.processJoinGame(chatId, userId, callbackQuery.from, gameId);
+        const joinGameId = params[0] === 'current' 
+          ? (await this.findActiveGameInChat(chatId.toString()))?.id 
+          : params[0];
+        if (joinGameId) {
+          await this.processJoinGame(chatId, userId, callbackQuery.from, joinGameId);
+        }
         break;
       case 'select_number':
         const [selectGameId, number] = params;
         await this.processNumberSelection(chatId, userId, selectGameId, parseInt(number));
+        // Update the message to show remaining numbers
+        await this.updateNumberSelectionMessage(chatId, callbackQuery.message!.message_id, selectGameId);
+        break;
+      case 'page_numbers':
+        const [pageGameId, page] = params;
+        await this.showNumberSelectionPage(chatId, pageGameId, parseInt(page), callbackQuery.message!.message_id);
         break;
       case 'show_numbers':
         const showGameId = params[0];
@@ -210,6 +223,16 @@ export class TelegramBotService {
       case 'quiz_answer':
         const [quizGameId, questionNumber, answer] = params;
         await this.processQuizAnswer(chatId, userId, quizGameId, parseInt(questionNumber), parseInt(answer));
+        break;
+      case 'quick_create':
+        const [mode, prizes] = params;
+        await this.handleQuickCreate(chatId, userId, mode, parseInt(prizes));
+        break;
+      case 'show_prize_options':
+        await this.showPrizeOptions(chatId);
+        break;
+      case 'noop':
+        // No operation - just acknowledge
         break;
     }
   }
@@ -294,12 +317,45 @@ Let's start playing! 🚀
       return;
     }
 
-    const title = args.length > 0 ? args.join(' ') : 'Pick Your Number Game';
+    // Parse arguments: /create_game [title] [reverse] [prizes]
+    // Example: /create_game "Lucky Draw" reverse 3
+    let title = 'Pick Your Number Game';
+    let isReverseMode = false;
+    let totalPrizes = 1;
+    
+    if (args.length > 0) {
+      // Check for special flags
+      const reverseIndex = args.indexOf('reverse');
+      if (reverseIndex !== -1) {
+        isReverseMode = true;
+        args.splice(reverseIndex, 1); // Remove 'reverse' from args
+      }
+      
+      // Check for prize count (last numeric argument)
+      const lastArg = args[args.length - 1];
+      if (!isNaN(parseInt(lastArg)) && parseInt(lastArg) >= 1 && parseInt(lastArg) <= 10) {
+        totalPrizes = parseInt(lastArg);
+        args.pop(); // Remove prize count from args
+      }
+      
+      // Remaining args are the title
+      if (args.length > 0) {
+        title = args.join(' ');
+      }
+    }
+    
+    // Generate prize distribution if prizes > 1
+    let prizeDistribution = undefined;
+    if (totalPrizes > 1) {
+      prizeDistribution = GameService.generateAutoPrizeDistribution(totalPrizes);
+    }
     
     const gameRequest: GameCreationRequest = {
       type: GameType.PICK_NUMBER,
       title,
-      description: 'Select a number and see if you win!',
+      description: isReverseMode 
+        ? 'Numbers drawn will be eliminated! Last players standing win!' 
+        : 'Select a number and see if you win!',
       chatId: chatId.toString(),
       settings: {
         pickNumber: {
@@ -309,10 +365,12 @@ Let's start playing! 🚀
           maxPlayers: config.games.pickNumber.maxPlayers,
           numberRange: { min: 1, max: 100 },
           allowDuplicateNumbers: false,
-          maxWinners: 1,
+          maxWinners: totalPrizes,
           announceInterval: config.games.pickNumber.announceInterval,
           autoStart: true,
-          enablePrizes: false
+          enablePrizes: totalPrizes > 1,
+          isReverseMode,
+          prizeDistribution
         }
       }
     };
@@ -363,36 +421,111 @@ Let's start playing! 🚀
     }
 
     const settings = game.settings.pickNumber!;
-    const availableNumbers = await this.redis.getAvailableNumbers(gameId, settings.numberRange.max);
     
-    // Create number selection keyboard
-    const keyboard = this.createNumberKeyboard(availableNumbers.slice(0, 20), gameId); // Show first 20 numbers
+    // Get the current game number state with available numbers
+    const gameNumberState = await this.gameService.getGameNumberState(gameId);
+    if (!gameNumberState) {
+      await this.sendMessage(chatId, 'Unable to get game state.');
+      return;
+    }
+
+    const availableNumbers = gameNumberState.availableNumbers;
+    
+    // Create pagination for large number ranges
+    const pageSize = 25; // Show 25 numbers per page
+    const totalPages = Math.ceil(availableNumbers.length / pageSize);
+    const currentPage = 0; // Start at first page
+    
+    const keyboard = this.createNumberKeyboardPage(
+      availableNumbers, 
+      gameId, 
+      currentPage, 
+      pageSize, 
+      totalPages
+    );
     
     const timeLeft = game.selection_deadline 
       ? Math.max(0, Math.floor((game.selection_deadline.getTime() - Date.now()) / 1000))
       : settings.timeLimit;
 
+    const modeText = settings.isReverseMode 
+      ? '⚠️ REVERSE MODE: Numbers drawn will be ELIMINATED!' 
+      : '🎯 Normal Mode: Numbers drawn will WIN!';
+
     const message = `
 🎯 *Select Your Number*
 
 Game: ${game.title}
+${modeText}
 Range: ${settings.numberRange.min} - ${settings.numberRange.max}
+Available Numbers: ${availableNumbers.length}
 Time left: ${Math.floor(timeLeft / 60)}:${(timeLeft % 60).toString().padStart(2, '0')}
 
-Choose a number below or type it in chat:
+Choose a number below:
     `;
 
     await this.sendMessage(chatId, message, {
       parse_mode: 'Markdown',
       reply_markup: { inline_keyboard: keyboard }
     });
+  }
 
-    // Set user session for number input
-    await this.redis.setPlayerSession(userId, {
-      gameId,
-      waitingForNumber: true,
-      chatId
-    }, 300); // 5 minutes
+  private createNumberKeyboardPage(
+    numbers: number[], 
+    gameId: string,
+    currentPage: number,
+    pageSize: number,
+    totalPages: number
+  ): TelegramBot.InlineKeyboardButton[][] {
+    const keyboard: TelegramBot.InlineKeyboardButton[][] = [];
+    
+    // Calculate slice indices
+    const startIdx = currentPage * pageSize;
+    const endIdx = Math.min(startIdx + pageSize, numbers.length);
+    const pageNumbers = numbers.slice(startIdx, endIdx).sort((a, b) => a - b);
+    
+    // Create number buttons (5 per row)
+    for (let i = 0; i < pageNumbers.length; i += 5) {
+      const row = pageNumbers.slice(i, i + 5).map(num => ({
+        text: num.toString(),
+        callback_data: `select_number:${gameId}:${num}`
+      }));
+      keyboard.push(row);
+    }
+    
+    // Add navigation row if needed
+    if (totalPages > 1) {
+      const navRow: TelegramBot.InlineKeyboardButton[] = [];
+      
+      if (currentPage > 0) {
+        navRow.push({
+          text: '⬅️ Previous',
+          callback_data: `page_numbers:${gameId}:${currentPage - 1}`
+        });
+      }
+      
+      navRow.push({
+        text: `📄 ${currentPage + 1}/${totalPages}`,
+        callback_data: 'noop' // No operation
+      });
+      
+      if (currentPage < totalPages - 1) {
+        navRow.push({
+          text: 'Next ➡️',
+          callback_data: `page_numbers:${gameId}:${currentPage + 1}`
+        });
+      }
+      
+      keyboard.push(navRow);
+    }
+    
+    // Add refresh button
+    keyboard.push([{
+      text: '🔄 Refresh Available Numbers',
+      callback_data: `show_numbers:${gameId}`
+    }]);
+    
+    return keyboard;
   }
 
   private async processNumberSelection(
@@ -500,16 +633,26 @@ Use /join to participate!
   async announceNewGame(chatId: number, game: Game): Promise<void> {
     const settings = game.settings.pickNumber!;
     
+    const modeEmoji = settings.isReverseMode ? '⚠️' : '🎯';
+    const modeText = settings.isReverseMode 
+      ? 'REVERSE MODE - Numbers drawn are ELIMINATED!' 
+      : 'Normal Mode - Numbers drawn WIN!';
+    
+    const prizeText = settings.enablePrizes && settings.prizeDistribution
+      ? `\n🏆 **Prizes:** ${settings.prizeDistribution.totalPrizes} winner${settings.prizeDistribution.totalPrizes > 1 ? 's' : ''}`
+      : '';
+    
     const message = `
-🎮 *New Game Created!*
+${modeEmoji} *New Game Created!*
 
 📝 **${game.title}**
 ${game.description || ''}
 
-🎯 **Game Type:** Pick Your Number
+🎯 **Game Mode:** ${modeText}
 👥 **Players:** ${settings.minPlayers} - ${settings.maxPlayers}
 ⏱️ **Join Time:** ${settings.joinTimeLimit} seconds
 ⌛ **Selection Time:** ${settings.timeLimit} seconds
+🔢 **Number Range:** ${settings.numberRange.min} - ${settings.numberRange.max}${prizeText}
 
 Click the button below to join!
     `;
@@ -615,19 +758,77 @@ Want to play again? An admin can create a new game with /create_game
   }
 
   private async findActiveGameInChat(chatId: string): Promise<Game | null> {
-    // This would be implemented to query active games by chat ID
-    // For now, return null - implement based on your database schema
-    return null;
+    try {
+      const result = await this.db.query(`
+        SELECT * FROM games 
+        WHERE chat_id = $1 
+        AND status IN ($2, $3, $4, $5)
+        ORDER BY created_at DESC
+        LIMIT 1
+      `, [chatId, GameStatus.CREATED, GameStatus.WAITING_FOR_PLAYERS, GameStatus.PLAYERS_JOINING, GameStatus.NUMBER_SELECTION]);
+
+      if (result.rows.length === 0) return null;
+
+      return this.mapRowToGame(result.rows[0]);
+    } catch (error) {
+      console.error('Error finding active game:', error);
+      return null;
+    }
   }
 
-  private async getPlayerByTelegramId(telegramId: number): Promise<any> {
-    // Implementation to get player by Telegram ID
-    return null;
+  private async getPlayerByTelegramId(telegramId: number): Promise<Player | null> {
+    try {
+      const result = await this.db.query(`
+        SELECT * FROM players WHERE telegram_user_id = $1
+      `, [telegramId]);
+
+      if (result.rows.length === 0) return null;
+
+      return result.rows[0];
+    } catch (error) {
+      console.error('Error getting player by telegram ID:', error);
+      return null;
+    }
   }
 
-  private async getPlayerById(playerId: string): Promise<any> {
-    // Implementation to get player by ID
-    return null;
+  private async getPlayerById(playerId: string): Promise<Player | null> {
+    try {
+      const result = await this.db.query(`
+        SELECT * FROM players WHERE id = $1
+      `, [playerId]);
+
+      if (result.rows.length === 0) return null;
+
+      return result.rows[0];
+    } catch (error) {
+      console.error('Error getting player by ID:', error);
+      return null;
+    }
+  }
+
+  private mapRowToGame(row: any): Game {
+    return {
+      id: row.id,
+      type: row.type,
+      status: row.status,
+      title: row.title,
+      description: row.description,
+      created_by: row.created_by,
+      chat_id: row.chat_id,
+      message_id: row.message_id,
+      settings: typeof row.settings === 'string' ? JSON.parse(row.settings) : row.settings,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+      started_at: row.started_at,
+      ended_at: row.ended_at,
+      winner_id: row.winner_id,
+      total_players: row.total_players,
+      max_players: row.max_players,
+      min_players: row.min_players,
+      time_limit: row.time_limit,
+      join_deadline: row.join_deadline,
+      selection_deadline: row.selection_deadline
+    };
   }
 
   private async sendGameStatus(chatId: number, game: Game): Promise<void> {
@@ -699,29 +900,41 @@ ${game.selection_deadline ? `⏰ **Selection Deadline:** ${game.selection_deadli
     const settingsMessage = `
 ⚙️ *Game Settings*
 
-Current configuration:
+*Create Game Options:*
+\`/create_game [title] [reverse] [prizes]\`
 
-*Pick Number Game:*
-• Min Players: ${config.games.pickNumber.minPlayers}
-• Max Players: ${config.games.pickNumber.maxPlayers}
+*Examples:*
+• \`/create_game\` - Basic game
+• \`/create_game "Lucky Draw"\` - Custom title
+• \`/create_game "Elimination" reverse\` - Reverse mode
+• \`/create_game "Big Prize" 5\` - 5 winners
+• \`/create_game "Ultimate" reverse 3\` - Reverse with 3 winners
+
+*Prize Distribution:*
+When multiple prizes are set, the distribution is:
+• 1st place: 50%
+• Others: Split remaining 50%
+
+*Settings Commands:*
+• \`/set_range [min] [max]\` - Set number range
+• \`/set_time [seconds]\` - Set selection time
+• \`/set_players [min] [max]\` - Set player limits
+
+*Current Defaults:*
+• Number Range: 1-100
 • Time Limit: ${config.games.pickNumber.defaultTimeLimit}s
-
-*Quiz Game:*
-• Default Questions: ${config.games.quiz.defaultQuestionCount}
-• Time per Question: ${config.games.quiz.defaultTimePerQuestion}s
-• Min Players: ${config.games.quiz.minPlayers}
-• Max Players: ${config.games.quiz.maxPlayers}
-• Prize Pool: ${config.games.quiz.prizePoolAmount} ${config.games.quiz.prizePoolCurrency}
-
-*Token Requirements:*
-• Token: ${config.solana.tokenSymbol}
-• Min Balance: ${config.solana.minTokenBalance}
-
-Use specific commands to modify settings.
+• Players: ${config.games.pickNumber.minPlayers}-${config.games.pickNumber.maxPlayers}
     `;
 
     await this.sendMessage(chatId, settingsMessage, {
-      parse_mode: 'Markdown'
+      parse_mode: 'Markdown',
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: '🎮 Create Basic Game', callback_data: 'quick_create:normal:1' }],
+          [{ text: '⚠️ Create Reverse Game', callback_data: 'quick_create:reverse:1' }],
+          [{ text: '🏆 Create Multi-Prize Game', callback_data: 'show_prize_options' }]
+        ]
+      }
     });
   }
 
@@ -860,6 +1073,118 @@ Token Address: \`${config.solana.tokenAddress}\`
     }
   }
 
+  private async updateNumberSelectionMessage(
+    chatId: number, 
+    messageId: number, 
+    gameId: string
+  ): Promise<void> {
+    try {
+      // Get updated game state
+      const gameNumberState = await this.gameService.getGameNumberState(gameId);
+      if (!gameNumberState) return;
+
+      const game = await this.gameService.getGame(gameId);
+      if (!game) return;
+
+      const settings = game.settings.pickNumber!;
+      const availableNumbers = gameNumberState.availableNumbers;
+      
+      const keyboard = this.createNumberKeyboardPage(
+        availableNumbers, 
+        gameId, 
+        0, // Reset to first page
+        25, 
+        Math.ceil(availableNumbers.length / 25)
+      );
+
+      const timeLeft = game.selection_deadline 
+        ? Math.max(0, Math.floor((game.selection_deadline.getTime() - Date.now()) / 1000))
+        : settings.timeLimit;
+
+      const modeText = settings.isReverseMode 
+        ? '⚠️ REVERSE MODE: Numbers drawn will be ELIMINATED!' 
+        : '🎯 Normal Mode: Numbers drawn will WIN!';
+
+      const message = `
+🎯 *Select Your Number*
+
+Game: ${game.title}
+${modeText}
+Range: ${settings.numberRange.min} - ${settings.numberRange.max}
+Available Numbers: ${availableNumbers.length}
+Time left: ${Math.floor(timeLeft / 60)}:${(timeLeft % 60).toString().padStart(2, '0')}
+
+Choose a number below:
+      `;
+
+      await this.bot.editMessageText(message, {
+        chat_id: chatId,
+        message_id: messageId,
+        parse_mode: 'Markdown',
+        reply_markup: { inline_keyboard: keyboard }
+      });
+    } catch (error) {
+      console.error('Error updating number selection message:', error);
+    }
+  }
+
+  private async showNumberSelectionPage(
+    chatId: number,
+    gameId: string,
+    page: number,
+    messageId: number
+  ): Promise<void> {
+    try {
+      const gameNumberState = await this.gameService.getGameNumberState(gameId);
+      if (!gameNumberState) return;
+
+      const game = await this.gameService.getGame(gameId);
+      if (!game) return;
+
+      const settings = game.settings.pickNumber!;
+      const availableNumbers = gameNumberState.availableNumbers;
+      const pageSize = 25;
+      const totalPages = Math.ceil(availableNumbers.length / pageSize);
+      
+      const keyboard = this.createNumberKeyboardPage(
+        availableNumbers, 
+        gameId, 
+        page, 
+        pageSize, 
+        totalPages
+      );
+
+      const timeLeft = game.selection_deadline 
+        ? Math.max(0, Math.floor((game.selection_deadline.getTime() - Date.now()) / 1000))
+        : settings.timeLimit;
+
+      const modeText = settings.isReverseMode 
+        ? '⚠️ REVERSE MODE: Numbers drawn will be ELIMINATED!' 
+        : '🎯 Normal Mode: Numbers drawn will WIN!';
+
+      const message = `
+🎯 *Select Your Number*
+
+Game: ${game.title}
+${modeText}
+Range: ${settings.numberRange.min} - ${settings.numberRange.max}
+Available Numbers: ${availableNumbers.length}
+Time left: ${Math.floor(timeLeft / 60)}:${(timeLeft % 60).toString().padStart(2, '0')}
+
+Choose a number below:
+      `;
+
+      await this.bot.editMessageText(message, {
+        chat_id: chatId,
+        message_id: messageId,
+        parse_mode: 'Markdown',
+        reply_markup: { inline_keyboard: keyboard }
+      });
+    } catch (error) {
+      console.error('Error showing number selection page:', error);
+    }
+  }
+
   // Health check
   async healthCheck(): Promise<boolean> {
     try {
@@ -875,6 +1200,43 @@ Token Address: \`${config.solana.tokenAddress}\`
   async stop(): Promise<void> {
     await this.bot.stopPolling();
     console.log('Telegram bot stopped');
+  }
+
+  private async handleQuickCreate(chatId: number, userId: number, mode: string, prizes: number): Promise<void> {
+    if (!await this.isUserAdmin(chatId, userId)) {
+      await this.sendMessage(chatId, 'Only admins can create games.');
+      return;
+    }
+
+    const args = mode === 'reverse' ? ['Quick Game', 'reverse', prizes.toString()] : ['Quick Game', prizes.toString()];
+    await this.handleCreateGameCommand(chatId, userId, args);
+  }
+
+  private async showPrizeOptions(chatId: number): Promise<void> {
+    const message = `
+🏆 *Select Number of Prizes*
+
+Choose how many winners you want:
+    `;
+
+    const keyboard: TelegramBot.InlineKeyboardButton[][] = [];
+    
+    // Create prize option buttons
+    for (let i = 2; i <= 10; i++) {
+      const row: TelegramBot.InlineKeyboardButton[] = [];
+      row.push({ text: `🏆 ${i} Winners`, callback_data: `quick_create:normal:${i}` });
+      if (i <= 5) { // Only show reverse mode for reasonable winner counts
+        row.push({ text: `⚠️ ${i} Winners (Reverse)`, callback_data: `quick_create:reverse:${i}` });
+      }
+      keyboard.push(row);
+    }
+    
+    keyboard.push([{ text: '❌ Cancel', callback_data: 'noop' }]);
+
+    await this.sendMessage(chatId, message, {
+      parse_mode: 'Markdown',
+      reply_markup: { inline_keyboard: keyboard }
+    });
   }
 }
 

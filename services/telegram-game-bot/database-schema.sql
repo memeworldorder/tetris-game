@@ -141,44 +141,55 @@ CREATE TABLE IF NOT EXISTS wallet_verifications (
     UNIQUE(player_id, wallet_address, token_address)
 );
 
--- Indexes for better performance
-CREATE INDEX IF NOT EXISTS idx_players_telegram_id ON players(telegram_user_id);
-CREATE INDEX IF NOT EXISTS idx_players_active ON players(is_active) WHERE is_active = true;
-CREATE INDEX IF NOT EXISTS idx_players_banned ON players(is_banned) WHERE is_banned = true;
+-- Prize distribution table for flexible prize structures
+CREATE TABLE IF NOT EXISTS prize_distributions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  game_id UUID NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+  total_prizes INTEGER NOT NULL CHECK (total_prizes >= 1 AND total_prizes <= 10),
+  auto_calculate BOOLEAN DEFAULT false,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
 
-CREATE INDEX IF NOT EXISTS idx_games_status ON games(status);
-CREATE INDEX IF NOT EXISTS idx_games_type ON games(type);
-CREATE INDEX IF NOT EXISTS idx_games_chat_id ON games(chat_id);
-CREATE INDEX IF NOT EXISTS idx_games_created_at ON games(created_at);
-CREATE INDEX IF NOT EXISTS idx_games_active ON games(status, created_at) WHERE status IN ('created', 'waiting_for_players', 'players_joining', 'number_selection', 'drawing');
+-- Individual prize entries
+CREATE TABLE IF NOT EXISTS prizes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  distribution_id UUID NOT NULL REFERENCES prize_distributions(id) ON DELETE CASCADE,
+  position INTEGER NOT NULL CHECK (position >= 1 AND position <= 10),
+  percentage DECIMAL(5,2) NOT NULL CHECK (percentage > 0 AND percentage <= 100),
+  amount DECIMAL(18,8),
+  winner_id UUID REFERENCES players(id),
+  claimed BOOLEAN DEFAULT false,
+  claimed_at TIMESTAMP WITH TIME ZONE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(distribution_id, position)
+);
 
-CREATE INDEX IF NOT EXISTS idx_game_participants_game_id ON game_participants(game_id);
-CREATE INDEX IF NOT EXISTS idx_game_participants_player_id ON game_participants(player_id);
-CREATE INDEX IF NOT EXISTS idx_game_participants_winner ON game_participants(is_winner) WHERE is_winner = true;
+-- Game number states for tracking available numbers
+CREATE TABLE IF NOT EXISTS game_number_states (
+  game_id UUID PRIMARY KEY REFERENCES games(id) ON DELETE CASCADE,
+  available_numbers INTEGER[] NOT NULL,
+  last_updated TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
 
-CREATE INDEX IF NOT EXISTS idx_number_selections_game_id ON number_selections(game_id);
-CREATE INDEX IF NOT EXISTS idx_number_selections_player_id ON number_selections(player_id);
-
-CREATE INDEX IF NOT EXISTS idx_game_history_game_id ON game_history(game_id);
-CREATE INDEX IF NOT EXISTS idx_game_history_timestamp ON game_history(timestamp);
-CREATE INDEX IF NOT EXISTS idx_game_history_action ON game_history(action);
-
-CREATE INDEX IF NOT EXISTS idx_webhook_events_status ON webhook_events(status);
-CREATE INDEX IF NOT EXISTS idx_webhook_events_created_at ON webhook_events(created_at);
-CREATE INDEX IF NOT EXISTS idx_webhook_events_game_id ON webhook_events(game_id);
-
-CREATE INDEX IF NOT EXISTS idx_quiz_questions_game_id ON quiz_questions(game_id);
-CREATE INDEX IF NOT EXISTS idx_quiz_questions_game_number ON quiz_questions(game_id, question_number);
-
-CREATE INDEX IF NOT EXISTS idx_quiz_answers_game_id ON quiz_answers(game_id);
-CREATE INDEX IF NOT EXISTS idx_quiz_answers_player_id ON quiz_answers(player_id);
-CREATE INDEX IF NOT EXISTS idx_quiz_answers_question_id ON quiz_answers(question_id);
-CREATE INDEX IF NOT EXISTS idx_quiz_answers_is_correct ON quiz_answers(is_correct) WHERE is_correct = true;
-
-CREATE INDEX IF NOT EXISTS idx_wallet_verifications_player_id ON wallet_verifications(player_id);
-CREATE INDEX IF NOT EXISTS idx_wallet_verifications_wallet ON wallet_verifications(wallet_address);
-CREATE INDEX IF NOT EXISTS idx_wallet_verifications_token ON wallet_verifications(token_address);
-CREATE INDEX IF NOT EXISTS idx_wallet_verifications_verified ON wallet_verifications(is_verified) WHERE is_verified = true;
+-- Create indexes
+CREATE INDEX idx_players_telegram_user_id ON players(telegram_user_id);
+CREATE INDEX idx_games_status ON games(status);
+CREATE INDEX idx_games_type_status ON games(type, status);
+CREATE INDEX idx_game_participants_game_id ON game_participants(game_id);
+CREATE INDEX idx_game_participants_player_id ON game_participants(player_id);
+CREATE INDEX idx_number_selections_game_id ON number_selections(game_id);
+CREATE INDEX idx_game_history_game_id ON game_history(game_id);
+CREATE INDEX idx_game_history_timestamp ON game_history(timestamp);
+CREATE INDEX idx_webhook_events_status ON webhook_events(status);
+CREATE INDEX idx_webhook_events_created_at ON webhook_events(created_at);
+CREATE INDEX idx_quiz_questions_game_id ON quiz_questions(game_id);
+CREATE INDEX idx_quiz_answers_game_id_player_id ON quiz_answers(game_id, player_id);
+CREATE INDEX idx_wallet_verifications_player_id ON wallet_verifications(player_id);
+CREATE INDEX idx_prize_distributions_game_id ON prize_distributions(game_id);
+CREATE INDEX idx_prizes_distribution_id ON prizes(distribution_id);
+CREATE INDEX idx_prizes_winner_id ON prizes(winner_id);
+CREATE INDEX idx_game_number_states_game_id ON game_number_states(game_id);
 
 -- Functions and triggers for automatic timestamp updates
 CREATE OR REPLACE FUNCTION update_updated_at_column()
