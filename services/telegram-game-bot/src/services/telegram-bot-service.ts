@@ -88,7 +88,7 @@ export class TelegramBotService {
     });
 
     // Error handling
-    this.bot.on('error', (error) => {
+    this.bot.on('error', (error: Error) => {
       console.error('Telegram bot error:', error);
     });
 
