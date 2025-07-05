@@ -180,10 +180,13 @@ export class WebhookService {
   }
 
   async cleanupOldWebhooks(daysToKeep: number = 7): Promise<number> {
-    const result = await this.db.query(`
-      DELETE FROM webhook_events 
-      WHERE created_at < NOW() - INTERVAL '${daysToKeep} days'
-    `);
+    if (typeof daysToKeep !== 'number' || daysToKeep <= 0) {
+      throw new Error('Invalid daysToKeep value. It must be a positive number.');
+    }
+    const result = await this.db.query(
+      `DELETE FROM webhook_events WHERE created_at < NOW() - INTERVAL $1 || ' days'`,
+      [daysToKeep.toString()]
+    );
 
     return result.rowCount || 0;
   }

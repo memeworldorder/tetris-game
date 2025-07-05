@@ -36,7 +36,10 @@ class Database {
     return this.pool.connect();
   }
 
-  public async query(text: string, params?: any[]): Promise<any> {
+  public async query(text: string, params: any[] = []): Promise<any> {
+    if (!Array.isArray(params)) {
+      throw new Error('Query parameters must be an array.');
+    }
     const client = await this.getClient();
     try {
       const result = await client.query(text, params);
